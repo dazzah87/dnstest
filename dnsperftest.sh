@@ -273,6 +273,5 @@ esac
      echo "All DNS responses were successfully authenticated using DNSSEC (ECDSA P-256, ECDSA P-384 & Ed25519)."
      echo ""
   fi
-fi
 
 exit 0
