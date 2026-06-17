@@ -1,7 +1,5 @@
-macOS
+**macOS**
 
-cd ~/Downloads
-
-chmod +x dnsperftest.sh
-
-./dnsperftest.sh
+1) cd ~/Downloads
+2) chmod +x dnsperftest.sh
+3) ./dnsperftest.sh
