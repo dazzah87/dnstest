@@ -148,25 +148,23 @@ print_table() {
   echo "- IPv6: $my_ipv6" 
   echo ""
   echo "Your DNS resolvers:"
-
-  resolver_ips=$(scutil --dns | grep 'nameserver' | awk '{print $3}' | sort -u)
+  
+  resolver_ips=$(scutil --dns | grep 'nameserver' | awk '{print $3}' | sort -u | grep -vE '^(192\.168\.|127\.0\.|::1|fdd1:)')
 
   if [ -n "$resolver_ips" ]; then
     while read -r ip; do
       [ -z "$ip" ] && continue
-      # PTR Record (Reverse DNS) abfragen
       ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || true)
       [ -n "$ptr" ] && ptr="${ptr%.}" || ptr="N/A"
       
-      # Anzeige für IPv4/IPv6
       if [[ "$ip" =~ ":" ]]; then
-        echo "- IPv6: $ip ($ptr)"
+        printf "- IPv6: %-40s (%s)\n" "$ip" "$ptr"
       else
-        echo "- IPv4: $ip ($ptr)"
+        printf "- IPv4: %-40s (%s)\n" "$ip" "$ptr"
       fi
     done <<< "$resolver_ips"
   else
-    echo "- Not available"
+    echo "- No external DNS resolvers detected via local routing."
   fi
   
   echo "" 
