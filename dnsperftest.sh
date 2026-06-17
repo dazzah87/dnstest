@@ -33,6 +33,7 @@ PROVIDERSV4="
 188.34.161.210#HaGeZi-Root
 159.69.155.94#HaGeZi-Wurzn
 45.90.28.0#NextDNS
+86.54.11.11#DNS4EU
 "
 
 PROVIDERSV6="
@@ -41,6 +42,7 @@ PROVIDERSV6="
 2a01:4f8:c17:1c66::1#HaGeZi-Root-v6
 2a01:4f8:1c1c:d363::1#HaGeZi-Wurzn-v6
 2a07:a8c0::#NextDNS-v6
+2a13:1001::86:54:11:11#DNS4EU-v6
 "
 
 DOMAINS2TEST=(
@@ -280,7 +282,7 @@ if [ "$format" = "table" ]; then
   done
 
   if [ "$has_any_failures" -eq 0 ]; then
-     echo "The DNS responses were successfully authenticated using DNSSEC (ECDSA P-256, ECDSA P-384, and Ed25519)."
+     echo "The DNS responses were successfully authenticated using DNSSEC (ECDSA P-256, ECDSA P-384 & Ed25519)."
      echo ""
   fi
 fi
