@@ -158,13 +158,13 @@ print_table() {
       [ -n "$ptr" ] && ptr="${ptr%.}" || ptr="N/A"
       
       if [[ "$ip" =~ ":" ]]; then
-        printf "- IPv6: %-40s (%s)\n" "$ip" "$ptr"
+        printf -- "- IPv6: %-40s (%s)\n" "$ip" "$ptr"
       else
-        printf "- IPv4: %-40s (%s)\n" "$ip" "$ptr"
+        printf -- "- IPv4: %-40s (%s)\n" "$ip" "$ptr"
       fi
     done <<< "$resolver_ips"
   else
-    echo "- No external DNS resolvers detected via local routing."
+    echo "- No external DNS resolvers detected."
   fi
   
   echo "" 
