@@ -147,9 +147,8 @@ print_table() {
   echo "- IPv4: $my_ipv4"
   echo "- IPv6: $my_ipv6" 
   echo ""
-  echo "Current DNS Resolvers:"
+  echo "Your DNS resolvers:"
 
-  # Abfrage der Resolver-IPs (filtert Subnetz-Daten heraus und behält nur saubere IPs)
   resolver_ips=$({
     $dig_cmd +short whoami.akamai.net A 2>/dev/null || true
     $dig_cmd +short o-o.myaddr.l.google.com TXT 2>/dev/null | tr -d '"' || true
@@ -157,14 +156,13 @@ print_table() {
 
   if [ -n "$resolver_ips" ]; then
     for ip in $resolver_ips; do
-      # PTR Record (Reverse DNS) abfragen
       ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || true)
       [ -n "$ptr" ] && ptr="${ptr%.}" || ptr="N/A"
       
       if [[ "$ip" == *":"* ]]; then
-        echo "- IPv6: $ip (PTR: $ptr)"
+        echo "- IPv6: $ip ($ptr)"
       else
-        echo "- IPv4: $ip (PTR: $ptr)"
+        echo "- IPv4: $ip ($ptr)"
       fi
     done
   else
