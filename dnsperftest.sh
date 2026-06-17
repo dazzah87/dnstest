@@ -148,8 +148,12 @@ print_table() {
   echo "- IPv6: $my_ipv6" 
   echo ""
   echo "Your DNS resolvers:"
-  
-  resolver_ips=$(scutil --dns | grep 'nameserver' | awk '{print $3}' | sort -u | grep -vE '^(192\.168\.|127\.0\.|::1|fdd1:)')
+
+  resolver_ips=$({
+    $dig_cmd +short -t A whoami.akamai.net 2>/dev/null
+    $dig_cmd +short -t AAAA whoami.akamai.net 2>/dev/null
+    $dig_cmd +short -t TXT o-o.myaddr.l.google.com 2>/dev/null | tr -d '"'
+  } | grep -E '([0-9]{1,3}\.){3}[0-9]{1,3}|[0-9a-fA-F:]+:[0-9a-fA-F:]+' | sort -u)
 
   if [ -n "$resolver_ips" ]; then
     while read -r ip; do
@@ -157,17 +161,12 @@ print_table() {
       ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || true)
       [ -n "$ptr" ] && ptr="${ptr%.}" || ptr="N/A"
       
-      if [[ "$ip" =~ ":" ]]; then
-        printf -- "- IPv6: %-40s (%s)\n" "$ip" "$ptr"
-      else
-        printf -- "- IPv4: %-40s (%s)\n" "$ip" "$ptr"
-      fi
+      printf -- "- %-45s (ptr: %s)\n" "$ip" "$ptr"
     done <<< "$resolver_ips"
   else
-    echo "- Not available."
+    echo "- Not available"
   fi
-  
-  echo "" 
+  echo ""
   
   printf "%-21s" "Provider"
   for ((i=1; i<=totaldomains; i++)); do printf "%-10s" "Test$i"; done
