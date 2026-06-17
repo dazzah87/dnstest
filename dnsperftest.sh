@@ -147,33 +147,34 @@ print_table() {
   echo ""
   echo "Your DNS resolvers:"
 
-  uid=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 8)
-  
-  {
-    # IPv4-Check
-    for ip in $($dig_cmd +short -t A "${uid}.whoami.akamai.net" 2>/dev/null); do
-      ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || echo "N/A")
-      printf -- "- IPv4: %-38s (%s)\n" "$ip" "${ptr%.}"
-    done
-    
-    # IPv6-Check
-    for ip in $($dig_cmd +short -t AAAA "${uid}.whoami.akamai.net" 2>/dev/null); do
-      ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || echo "N/A")
-      printf -- "- IPv6: %-38s (%s)\n" "$ip" "${ptr%.}"
-    done
-  } | sort -u
-  echo ""
+  resolver_ips_v4=""
+  resolver_ips_v6=""
 
-  if [ -n "$resolver_ips" ]; then
+  # IPv4 Abfrage
+  resolver_ips_v4=$($dig_cmd +short -4 -t A whoami.akamai.net 2>/dev/null || true)
+  # IPv6 Abfrage
+  resolver_ips_v6=$($dig_cmd +short -6 -t AAAA whoami.akamai.net 2>/dev/null || true)
+
+  if [ -n "$resolver_ips_v4" ]; then
     while read -r ip; do
       [ -z "$ip" ] && continue
-      ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || true)
-      [ -n "$ptr" ] && ptr="${ptr%.}" || ptr="N/A"
-      printf -- "- %-10s (%s)\n" "$ip" "$ptr"
-    done <<< "$resolver_ips"
-  else
+      ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || echo "N/A")
+      printf -- "- IPv4: %-38s (%s)\n" "$ip" "${ptr%.}"
+    done <<< "$resolver_ips_v4"
+  fi
+
+  if [ -n "$resolver_ips_v6" ]; then
+    while read -r ip; do
+      [ -z "$ip" ] && continue
+      ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || echo "N/A")
+      printf -- "- IPv6: %-38s (%s)\n" "$ip" "${ptr%.}"
+    done <<< "$resolver_ips_v6"
+  fi
+
+  if [ -z "$resolver_ips_v4" ] && [ -z "$resolver_ips_v6" ]; then
     echo "- Not available"
   fi
+  
   echo ""
   
   printf "%-21s" "Provider"
