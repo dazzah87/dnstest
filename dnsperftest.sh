@@ -149,21 +149,24 @@ print_table() {
   echo ""
   echo "Your DNS resolvers:"
 
-  # Korrigierte Resolver-Erkennung für IPv4 UND IPv6
-  # Wir fragen nun explizit nach A (IPv4) und AAAA (IPv6)
+  # Resolver-Erkennung für IPv4 und IPv6 (Explizite Abfragen für A und AAAA)
   resolver_ips=$({
-    $dig_cmd +short whoami.akamai.net A 2>/dev/null || true
-    $dig_cmd +short whoami.akamai.net AAAA 2>/dev/null || true
-    $dig_cmd +short o-o.myaddr.l.google.com TXT 2>/dev/null | tr -d '"' || true
+    # Explizite IPv4-Abfrage
+    $dig_cmd +short -t A whoami.akamai.net 2>/dev/null || true
+    # Explizite IPv6-Abfrage
+    $dig_cmd +short -t AAAA whoami.akamai.net 2>/dev/null || true
+    # Google-Fallback
+    $dig_cmd +short -t TXT o-o.myaddr.l.google.com 2>/dev/null | tr -d '"' || true
   } | grep -E '([0-9]{1,3}\.){3}[0-9]{1,3}|[0-9a-fA-F:]+:[0-9a-fA-F:]+' | sort -u)
 
   if [ -n "$resolver_ips" ]; then
     while read -r ip; do
       [ -z "$ip" ] && continue
+      # PTR-Abfrage für IPv4 oder IPv6
       ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || true)
       [ -n "$ptr" ] && ptr="${ptr%.}" || ptr="N/A"
       
-      # Automatische Unterscheidung IPv4/IPv6 in der Anzeige
+      # Anzeige formatieren
       if [[ "$ip" == *":"* ]]; then
         echo "- IPv6: $ip ($ptr)"
       else
