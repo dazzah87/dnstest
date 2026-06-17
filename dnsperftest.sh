@@ -145,26 +145,6 @@ print_table() {
   echo "- IPv4: $my_ipv4"
   echo "- IPv6: $my_ipv6" 
   echo ""
-  echo "Your DNS resolvers:"
-  
-  ipv4_resolver=$($dig_cmd +short -t A whoami.akamai.net 2>/dev/null | head -n1)
-  ipv6_resolver=$($dig_cmd +short -t AAAA ipv6.test-ipv6.com 2>/dev/null | head -n1)
-
-  if [ -n "$ipv4_resolver" ]; then
-    ptr=$($dig_cmd +short -x "$ipv4_resolver" 2>/dev/null | tail -n 1 || echo "N/A")
-    printf -- "- IPv4: %-38s (%s)\n" "$ipv4_resolver" "${ptr%.}"
-  fi
-
-  if [ -n "$ipv6_resolver" ]; then
-    ptr=$($dig_cmd +short -x "$ipv6_resolver" 2>/dev/null | tail -n 1 || echo "N/A")
-    printf -- "- IPv6: %-38s (%s)\n" "$ipv6_resolver" "${ptr%.}"
-  fi
-
-  if [ -z "$ipv4_resolver" ] && [ -z "$ipv6_resolver" ]; then
-    echo "- Not available"
-  fi
-  
-  echo ""
 
   printf "%-21s" "Provider"
   for ((i=1; i<=totaldomains; i++)); do printf "%-10s" "Test$i"; done
