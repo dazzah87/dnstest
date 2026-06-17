@@ -67,27 +67,28 @@ check_ipv6_support() {
   fi
 }
 
+# Fetch user public IPs and ISP/ASN in background to speed up execution
 fetch_user_ips() {
-  local v4="Not available" v4_ptr="Not available"
-  local v6="Not available" v6_ptr="Not available"
+  local v4="Not available" v4_info="Not available"
+  local v6="Not available" v6_info="Not available"
   
   v4=$(curl -s -m 2 https://myipv4.addr.tools/plain 2>/dev/null || true)
   if [[ -n "$v4" ]]; then
-    v4_ptr=$($dig_cmd -x "$v4" +short 2>/dev/null | tail -n1 | sed 's/\.$//' || true)
-    [[ -z "$v4_ptr" ]] && v4_ptr="Not available"
+    v4_info=$(curl -s -m 2 "ipinfo.io/${v4}/org" 2>/dev/null || true)
+    [[ -z "$v4_info" ]] && v4_info="Not available"
   else
     v4="Not available"
   fi
 
   v6=$(curl -s -m 2 https://myipv6.addr.tools/plain 2>/dev/null || true)
   if [[ -n "$v6" ]]; then
-    v6_ptr=$($dig_cmd -x "$v6" +short 2>/dev/null | tail -n1 | sed 's/\.$//' || true)
-    [[ -z "$v6_ptr" ]] && v6_ptr="Not available"
+    v6_info=$(curl -s -m 2 "ipinfo.io/${v6}/org" 2>/dev/null || true)
+    [[ -z "$v6_info" ]] && v6_info="Not available"
   else
     v6="Not available"
   fi
 
-  echo "$v4|$v4_ptr|$v6|$v6_ptr" > "$TMP_DIR/user_ips.txt"
+  echo "$v4|$v4_info|$v6|$v6_info" > "$TMP_DIR/user_ips.txt"
 }
 
 # ==============================================================================
@@ -183,20 +184,19 @@ sort_rows() {
 }
 
 print_table() {
-  local my_ipv4="Not available" my_ipv4_ptr="Not available"
-  local my_ipv6="Not available" my_ipv6_ptr="Not available"
+  local my_ipv4="Not available" my_ipv4_info="Not available"
+  local my_ipv6="Not available" my_ipv6_info="Not available"
   
   if [[ -f "$TMP_DIR/user_ips.txt" ]]; then
-    IFS='|' read -r my_ipv4 my_ipv4_ptr my_ipv6 my_ipv6_ptr < "$TMP_DIR/user_ips.txt"
+    IFS='|' read -r my_ipv4 my_ipv4_info my_ipv6 my_ipv6_info < "$TMP_DIR/user_ips.txt"
   fi
 
   echo ""
   echo "Your public IP:"
-  echo "- IPv4: $my_ipv4 (PTR: $my_ipv4_ptr)"
-  echo "- IPv6: $my_ipv6 (PTR: $my_ipv6_ptr)" 
+  echo "- IPv4: $my_ipv4 (ISP: $my_ipv4_info)"
+  echo "- IPv6: $my_ipv6 (ISP: $my_ipv6_info)" 
   echo ""
 
-  # Table Header ohne PTR
   printf "\033[1m%-16s %-24s\e[0m" "Provider" "IP"
   for ((i=1; i<=totaldomains; i++)); do printf "\e[1m%-8s\e[0m" "Test$i"; done
   printf "\033[1m%-8s %-7s\e[0m\n" "Average" "DNSSEC"
@@ -223,9 +223,9 @@ print_table() {
     cat "$TMP_DIR"/*_audit.txt
   else
     printf "\nGreat! All DNS responses were successfully authenticated using DNSSEC.\n\n"
-    printf "  %-15s \e[32mPASS\e[0m\n" "ECDSA P-256"
-    printf "  %-15s \e[32mPASS\e[0m\n" "ECDSA P-384"
-    printf "  %-15s \e[32mPASS\e[0m\n" "Ed25519"
+    printf "%-15s \e[32mPASS\e[0m\n" "ECDSA P-256"
+    printf "%-15s \e[32mPASS\e[0m\n" "ECDSA P-384"
+    printf "%-15s \e[32mPASS\e[0m\n" "Ed25519"
     printf "\n"
   fi
 }
