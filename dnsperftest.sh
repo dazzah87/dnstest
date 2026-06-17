@@ -148,13 +148,13 @@ print_table() {
   echo "Your public IP:"
   echo "- IPv4: $my_ipv4"
   echo "- IPv6: $my_ipv6"
-  echo "" 
+  echo ""
   echo "Your DNS resolver: $current_resolver"
-  echo "" 
+  echo ""
 
   printf "%-21s" "Provider"
   for ((i=1; i<=totaldomains; i++)); do printf "%-10s" "Test$i"; done
-  printf "%-10s %-7s\n" "Average" "DNSSEC"
+  printf "%-10s %s\n" "Average" "DNSSEC"
 
   while IFS= read -r row; do
     [ -z "$row" ] && continue
