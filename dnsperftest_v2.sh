@@ -117,7 +117,7 @@ run_dnssec_audit_silent() {
     "Expired signature:expiredsig.test:NO"
     "Missing signature:nosig.test:NO"
   )
-  local algos=("alg13:ECDSA P-256" "alg14:ECDSA P-384" "alg15:Ed25519")
+  local algos=("alg8:RSA/SHA256" "alg13:ECDSA P-256" "alg14:ECDSA P-384" "alg15:Ed25519")
 
   for t in "${tests[@]}"; do
     IFS=':' read -r test_name prefix expect <<< "$t"
@@ -264,23 +264,21 @@ print_table() {
     printf "%-8s ${c_ecs}%-8s${c_end}\n" "${parts[totaldomains+2]}" "$ecs_val"
   done < <(echo "$rows" | sort_rows)
 
-  # Print DNSSEC Block
   if ls "$TMP_DIR"/*_audit.txt 1> /dev/null 2>&1; then
     printf "\n\033[1m--- DNSSEC Audit Failures ---\033[0m\n"
     cat "$TMP_DIR"/*_audit.txt
   else
     printf "\nGreat! All DNS responses were successfully authenticated using DNSSEC.\n\n"
-    printf "%-20s%-16s%-16s%s\n" "" "ECDSA P-256" "ECDSA P-384" "Ed25519"
+    printf "%-20s%-16s%-16s%s\n" "" "RSA/SHA256" "ECDSA P-256" "ECDSA P-384" "Ed25519"
     printf "%-20s\e[32mPASS\e[0m            \e[32mPASS\e[0m            \e[32mPASS\e[0m\n" "Valid signature"
     printf "%-20s\e[32mPASS\e[0m            \e[32mPASS\e[0m            \e[32mPASS\e[0m\n" "Invalid signature"
     printf "%-20s\e[32mPASS\e[0m            \e[32mPASS\e[0m            \e[32mPASS\e[0m\n" "Expired signature"
     printf "%-20s\e[32mPASS\e[0m            \e[32mPASS\e[0m            \e[32mPASS\e[0m\n" "Missing signature"
   fi
 
-  # Print Terminology Legend
   printf "\n\033[1m--- Info ---\033[0m\n"
-  printf "Privacy: 'Strict' means your IP is hidden from destination servers.\n"
-  printf "         'Sent' means your IP subnet is shared (better routing, less privacy).\n\n"
+  printf "'Strict' = No ECS (EDNS Client Subnet).\n\n"
+  printf "'Sent' = Your IP subnet is shared (better routing, less privacy).\n\n"
 }
 
 print_csv() {
@@ -361,7 +359,6 @@ case "$mode" in
     ;;
 esac
 
-# Start IP check in background immediately to save execution time
 fetch_user_ips &
 
 for p in $providerstotest; do
@@ -375,7 +372,6 @@ done
 
 wait
 
-# Safely gather results
 rows=$(cat "$TMP_DIR"/*.res 2>/dev/null || true)
 
 case "$format" in
