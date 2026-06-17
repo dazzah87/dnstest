@@ -157,7 +157,7 @@ test_provider_worker() {
   local audit_fails
   audit_fails=$(run_dnssec_audit_silent "$pip")
   if [[ -n "$audit_fails" ]]; then
-    echo -e "Security vulnerability in \e[33m$pname\e[0m ($pip):\n$audit_fails" > "$TMP_DIR/${pip}_audit.txt"
+    printf "Security vulnerability in \033[33m%s\033[0m (%s):\n%s\n" "$pname" "$pip" "$audit_fails" > "$TMP_DIR/${pip}_audit.txt"
   fi
 
   # Write main row result
@@ -188,9 +188,9 @@ print_table() {
   echo "- IPv6: $my_ipv6" 
   echo ""
 
-  printf "\e[1m%-21s\e[0m" "Provider"
+  printf "\033[1m%-21s\e[0m" "Provider"
   for ((i=1; i<=totaldomains; i++)); do printf "\e[1m%-10s\e[0m" "Test$i"; done
-  printf "\e[1m%-10s %-7s\e[0m\n" "Average" "DNSSEC"
+  printf "\033[1m%-10s %-7s\e[0m\n" "Average" "DNSSEC"
 
   while IFS= read -r row; do
     [[ -z "$row" ]] && continue
@@ -211,10 +211,10 @@ print_table() {
   # Append detailed audit findings if any exist (Only for Table format)
   local audit_files=("$TMP_DIR"/*_audit.txt)
   if [[ -e "${audit_files[0]}" ]]; then
-    echo -e "\n\e[1m--- DNSSEC Audit Failures ---\e[0m"
+    printf "\n\033[1m--- DNSSEC Audit Failures ---\033[0m\n"
     cat "$TMP_DIR"/*_audit.txt
   else
-    echo -e "\n\e[32mAll DNS responses successfully authenticated via DNSSEC.\e[0m"
+    printf "\n\033[32mAll DNS responses successfully authenticated via DNSSEC.\033[0m\n"
   fi
 }
 
