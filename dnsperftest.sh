@@ -149,8 +149,6 @@ print_table() {
   echo ""
   echo "Your DNS resolvers:"
 
-  # Sammle alle IPs von den Test-Diensten
-  # Wir erlauben explizit IPv4 und IPv6 Muster
   resolver_ips=$({
     $dig_cmd +short whoami.akamai.net A 2>/dev/null || true
     $dig_cmd +short whoami.akamai.net AAAA 2>/dev/null || true
@@ -158,12 +156,10 @@ print_table() {
   } | grep -E '([0-9]{1,3}\.){3}[0-9]{1,3}|[0-9a-fA-F:]+:[0-9a-fA-F:]+' | sort -u)
 
   if [ -n "$resolver_ips" ]; then
-    # Hier zeigen wir die Daten an
     for ip in $resolver_ips; do
       ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || true)
       [ -n "$ptr" ] && ptr="${ptr%.}" || ptr="N/A"
       
-      # Ausgabe im Stil deines Screenshots
       printf "  %-40s ptr: %s\n" "$ip" "$ptr"
     done
   else
