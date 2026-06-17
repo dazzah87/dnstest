@@ -142,18 +142,14 @@ print_table() {
   echo ""
   my_ipv4=$(curl -s -m 2 https://myipv4.addr.tools/plain 2>/dev/null || echo "Not available")
   my_ipv6=$(curl -s -m 2 https://myipv6.addr.tools/plain 2>/dev/null || echo "Not available")
-  current_resolver=$($dig_cmd +short whoami.akamai.net 2>/dev/null | tail -n 1 || true)
-  [ -z "$current_resolver" ] && current_resolver="Not available"
-
   echo "Your public IP:"
   echo "- IPv4: $my_ipv4"
   echo "- IPv6: $my_ipv6" 
-  echo "Current DNS Resolver: $current_resolver"
   echo "" 
 
-  printf "\e[1;7m%-21s" "Provider"
+  printf "%-21s" "Provider"
   for ((i=1; i<=totaldomains; i++)); do printf "%-10s" "Test$i"; done
-  printf "%-10s %-7s\e[0m\n" "Average" "DNSSEC"
+  printf "%-10s %s\n" "Average" "DNSSEC"
 
   while IFS= read -r row; do
     [ -z "$row" ] && continue
