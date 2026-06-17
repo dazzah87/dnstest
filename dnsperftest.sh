@@ -109,7 +109,7 @@ for p in $providerstotest; do
   row="$pname"
 
   for d in "${DOMAINS2TEST[@]}"; do
-    ttime=$($dig_cmd +short +tries=1 +time=2 +stats @"$pip" "$d" 2>/dev/null | awk '/Query time:/ {print $4; exit}' || true)
+    ttime=$($dig_cmd +tries=1 +time=2 +stats @"$pip" "$d" 2>/dev/null | awk '/Query time:/ {print $4; exit}' || true)
     if [ -z "${ttime:-}" ]; then ttime=1000; elif [ "$ttime" = "0" ]; then ttime=1; fi
     row="${row}|${ttime}"
     ftime=$((ftime + ttime))
@@ -147,7 +147,7 @@ print_table() {
   echo "- IPv4: $my_ipv4"
   echo "- IPv6: $my_ipv6" 
   echo ""
-  echo "Current DNS Resolver (Terminal Layer):"
+  echo "Your DNS resolvers:"
 
   resolver_ips=$({
     $dig_cmd +short whoami.akamai.net A 2>/dev/null || true
@@ -158,16 +158,16 @@ print_table() {
     for ip in $resolver_ips; do
       ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || true)
       [ -n "$ptr" ] && ptr="${ptr%.}" || ptr="N/A"
-      if [[ "$ip" == *":"* ]]; then echo "- IPv6: $ip (PTR: $ptr)"; else echo "- IPv4: $ip (PTR: $ptr)"; fi
+      
+      if [[ "$ip" == *":"* ]]; then
+        echo "- IPv6: $ip ($ptr)"
+      else
+        echo "- IPv4: $ip ($ptr)"
+      fi
     done
   else
     echo "- Not available"
   fi
-  
-  echo ""
-  echo "Why is this different from my browser?"
-  echo "- The Terminal (dig): Uses raw system settings (/etc/resolv.conf). It ignores browser-based DoH profiles."
-  echo "- Browser & System: Often use encrypted DoH (DNS-over-HTTPS). Browser settings or macOS profiles route traffic through them, bypassing raw network adapters."
   echo "" 
 
   printf "%-21s" "Provider"
@@ -177,9 +177,15 @@ print_table() {
   while IFS= read -r row; do
     [ -z "$row" ] && continue
     IFS='|' read -r -a parts <<< "$row"
+
     printf "%-21s" "${parts[0]}"
-    for ((i=1; i<=totaldomains; i++)); do printf "%-10s" "${parts[i]}ms"; done
+    
+    for ((i=1; i<=totaldomains; i++)); do
+      printf "%-10s" "${parts[i]}ms"
+    done
+    
     printf "%-10s " "${parts[totaldomains+1]}"
+    
     dnssec_val="${parts[totaldomains+2]}"
     if [[ "$dnssec_val" == *"Yes"* ]]; then
         printf "\e[32m%s\e[0m\n" "$dnssec_val"
