@@ -15,7 +15,6 @@ else
   exit 1
 fi
 
-# Create a secure temporary directory for concurrent job outputs
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
 
@@ -39,18 +38,7 @@ PROVIDERSV6="
 2a13:1001::86:54:11:11#DNS4EU-v6
 "
 
-DOMAINS2TEST=(
-  google.com
-  youtube.com
-  facebook.com
-  github.com
-  instagram.com
-  whatsapp.com
-  reddit.com
-  wikipedia.org
-  amazon.com
-  tiktok.com
-)
+DOMAINS2TEST=(google.com youtube.com facebook.com github.com instagram.com whatsapp.com reddit.com wikipedia.org amazon.com tiktok.com)
 totaldomains=${#DOMAINS2TEST[@]}
 
 # ==============================================================================
@@ -79,8 +67,32 @@ check_ipv6_support() {
   fi
 }
 
+# Fetch user public IPs and PTR in background to speed up execution
+fetch_user_ips() {
+  local v4="Not available" v4_ptr="Not available"
+  local v6="Not available" v6_ptr="Not available"
+  
+  v4=$(curl -s -m 2 https://myipv4.addr.tools/plain 2>/dev/null || true)
+  if [[ -n "$v4" ]]; then
+    v4_ptr=$($dig_cmd -x "$v4" +short 2>/dev/null | tail -n1 | sed 's/\.$//' || true)
+    [[ -z "$v4_ptr" ]] && v4_ptr="Not available"
+  else
+    v4="Not available"
+  fi
+
+  v6=$(curl -s -m 2 https://myipv6.addr.tools/plain 2>/dev/null || true)
+  if [[ -n "$v6" ]]; then
+    v6_ptr=$($dig_cmd -x "$v6" +short 2>/dev/null | tail -n1 | sed 's/\.$//' || true)
+    [[ -z "$v6_ptr" ]] && v6_ptr="Not available"
+  else
+    v6="Not available"
+  fi
+
+  echo "$v4|$v4_ptr|$v6|$v6_ptr" > "$TMP_DIR/user_ips.txt"
+}
+
 # ==============================================================================
-# Core Testing Logic (Designed for Concurrency)
+# Core Testing Logic
 # ==============================================================================
 
 run_dnssec_audit_silent() {
@@ -117,39 +129,31 @@ run_dnssec_audit_silent() {
   echo "$fails"
 }
 
-# Worker function to test a single provider (Runs in background)
 test_provider_worker() {
-  local pip=$1
-  local pname=$2
-  local ftime=0
+  local pip=$1 pname=$2
+  local ftime=0 ptr
   
-  # Fetch PTR Record (Reverse DNS) and strip trailing dot
-  local ptr
   ptr=$($dig_cmd -x "$pip" +short 2>/dev/null | tail -n1 | sed 's/\.$//' || true)
   [[ -z "$ptr" ]] && ptr="N/A"
 
-  # Initialize row with Provider, IP, and PTR
   local row="${pname}|${pip}|${ptr}"
 
   for d in "${DOMAINS2TEST[@]}"; do
     local ttime
     ttime=$($dig_cmd +tries=1 +time=2 +stats @"$pip" "$d" 2>/dev/null | awk '/Query time:/ {print $4; exit}' || true)
     
-    # Fallbacks for timeouts or 0ms caches
-    if [[ -z "$ttime" ]]; then ttime=1000; elif [[ "$ttime" == "0" ]]; then ttime=1; fi
+    [[ -z "$ttime" ]] && ttime=1000
+    [[ "$ttime" == "0" ]] && ttime=1
     
     row="${row}|${ttime}"
     ((ftime += ttime))
   done
 
-  # Calculate Average
   local avg
   avg=$(awk -v ftime="$ftime" -v total="$totaldomains" 'BEGIN {printf "%.2f", ftime/total}')
   row="${row}|${avg}"
 
-  # Basic DNSSEC check
-  local dnssec="No"
-  local chk_valid chk_bad
+  local dnssec="No" chk_valid chk_bad
   chk_valid=$($dig_cmd +short +tries=1 +time=2 @"$pip" test.dnscheck.tools A 2>/dev/null || true)
   
   if [[ -n "$chk_valid" ]]; then
@@ -160,14 +164,12 @@ test_provider_worker() {
   fi
   row="${row}|${dnssec}"
 
-  # Run detailed audit and save it to a separate file to prevent output pollution
   local audit_fails
   audit_fails=$(run_dnssec_audit_silent "$pip")
   if [[ -n "$audit_fails" ]]; then
     printf "Security vulnerability in \033[33m%s\033[0m (%s):\n%s\n" "$pname" "$pip" "$audit_fails" > "$TMP_DIR/${pip}_audit.txt"
   fi
 
-  # Write main row result
   echo "$row" > "$TMP_DIR/${pip}.res"
 }
 
@@ -176,7 +178,6 @@ test_provider_worker() {
 # ==============================================================================
 
 sort_rows() {
-  # Column index for average (3 meta fields + N domains + 1 for 1-based index)
   local col_idx=$((totaldomains + 4))
   if [[ "$sort_mode" == "fastest" ]]; then
     sort -t '|' -k"${col_idx},${col_idx}n"
@@ -186,30 +187,19 @@ sort_rows() {
 }
 
 print_table() {
+  local my_ipv4="Not available" my_ipv4_ptr="Not available"
+  local my_ipv6="Not available" my_ipv6_ptr="Not available"
+  
+  if [[ -f "$TMP_DIR/user_ips.txt" ]]; then
+    IFS='|' read -r my_ipv4 my_ipv4_ptr my_ipv6 my_ipv6_ptr < "$TMP_DIR/user_ips.txt"
+  fi
+
   echo ""
-  local my_ipv4 my_ipv6 my_ipv4_ptr my_ipv6_ptr
-  my_ipv4=$(curl -s -m 2 https://myipv4.addr.tools/plain 2>/dev/null || echo "Not available")
-  my_ipv6=$(curl -s -m 2 https://myipv6.addr.tools/plain 2>/dev/null || echo "Not available")
-
-  my_ipv4_ptr="Not available"
-  my_ipv6_ptr="Not available"
-
-  if [[ "$my_ipv4" != "Not available" ]]; then
-    my_ipv4_ptr=$($dig_cmd -x "$my_ipv4" +short 2>/dev/null | tail -n1 | sed 's/\.$//' || true)
-    [[ -z "$my_ipv4_ptr" ]] && my_ipv4_ptr="Not available"
-  fi
-
-  if [[ "$my_ipv6" != "Not available" ]]; then
-    my_ipv6_ptr=$($dig_cmd -x "$my_ipv6" +short 2>/dev/null | tail -n1 | sed 's/\.$//' || true)
-    [[ -z "$my_ipv6_ptr" ]] && my_ipv6_ptr="Not available"
-  fi
-
   echo "Your public IP:"
   echo "- IPv4: $my_ipv4 (PTR: $my_ipv4_ptr)"
   echo "- IPv6: $my_ipv6 (PTR: $my_ipv6_ptr)" 
   echo ""
 
-  # Table Header
   printf "\033[1m%-16s %-24s %-28s\e[0m" "Provider" "IP" "PTR"
   for ((i=1; i<=totaldomains; i++)); do printf "\e[1m%-8s\e[0m" "Test$i"; done
   printf "\033[1m%-8s %-7s\e[0m\n" "Average" "DNSSEC"
@@ -218,21 +208,13 @@ print_table() {
     [[ -z "$row" ]] && continue
     IFS='|' read -r -a parts <<< "$row"
     
-    # Truncate PTR if it gets too long for the table view
     local d_ptr="${parts[2]}"
-    if [[ ${#d_ptr} -gt 26 ]]; then
-      d_ptr="${d_ptr:0:24}.."
-    fi
+    [[ ${#d_ptr} -gt 26 ]] && d_ptr="${d_ptr:0:24}.."
 
     printf "%-16s %-24s %-28s" "${parts[0]}" "${parts[1]}" "$d_ptr"
-    
-    # Print domain test times
     for ((i=1; i<=totaldomains; i++)); do printf "%-8s" "${parts[i+2]}ms"; done
-    
-    # Print Average
     printf "%-8s " "${parts[totaldomains+3]}"
     
-    # Print DNSSEC status
     local dnssec_val="${parts[totaldomains+4]}"
     case "$dnssec_val" in
       *Yes*) printf "\e[32m%s\e[0m\n" "$dnssec_val" ;;
@@ -241,13 +223,16 @@ print_table() {
     esac
   done < <(echo "$rows" | sort_rows)
 
-  # Append detailed audit findings if any exist
   local audit_files=("$TMP_DIR"/*_audit.txt)
   if [[ -e "${audit_files[0]}" ]]; then
     printf "\n\033[1m--- DNSSEC Audit Failures ---\033[0m\n"
     cat "$TMP_DIR"/*_audit.txt
   else
-    printf "\nAll DNS responses were successfully authenticated using DNSSEC (ECDSA P-256, ECDSA P-384 & Ed25519).\n"
+    printf "\n"
+    printf "  %-15s \e[32mPASS\e[0m\n" "ECDSA P-256"
+    printf "  %-15s \e[32mPASS\e[0m\n" "ECDSA P-384"
+    printf "  %-15s \e[32mPASS\e[0m\n" "Ed25519"
+    printf "\nGreat! All DNS responses were successfully authenticated using DNSSEC.\n"
   fi
 }
 
@@ -329,24 +314,22 @@ case "$mode" in
     ;;
 esac
 
-# 1. Fire off all tests concurrently
+# Start IP check in background immediately to save execution time
+fetch_user_ips &
+
 for p in $providerstotest; do
   [[ -z "$p" ]] && continue
   pip=${p%%#*}
   pname=${p##*#}
   [[ -z "$pname" ]] && pname="$pip"
   
-  # Execute in background
   test_provider_worker "$pip" "$pname" &
 done
 
-# 2. Wait for all background tasks to finish
 wait
 
-# 3. Aggregate results
 rows=$(cat "$TMP_DIR"/*.res 2>/dev/null || true)
 
-# 4. Route to the correct output formatter
 case "$format" in
   table) print_table ;;
   csv)   print_csv ;;
