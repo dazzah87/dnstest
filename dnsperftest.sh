@@ -113,7 +113,6 @@ for p in $providerstotest; do
     ftime=$((ftime + ttime))
   done
 
-  # Durchschnittsberechnung nativ per awk statt bc
   avg=$(awk -v ftime="$ftime" -v total="$totaldomains" 'BEGIN {printf "%.2f", ftime/total}')
   row="${row}|${avg}"
 
@@ -156,15 +155,12 @@ print_table() {
 
     printf "%-21s" "${parts[0]}"
     
-    # Dynamisches Auslesen der Testzeiten
     for ((i=1; i<=totaldomains; i++)); do
       printf "%-10s" "${parts[i]}ms"
     done
     
-    # Durchschnittswert (liegt an Position totaldomains+1)
     printf "%-10s " "${parts[totaldomains+1]}"
     
-    # DNSSEC Spalte (liegt an Position totaldomains+2)
     dnssec_val="${parts[totaldomains+2]}"
     if [[ "$dnssec_val" == *"Yes"* ]]; then
         printf "\e[32m%s\e[0m\n" "$dnssec_val"
@@ -284,7 +280,7 @@ if [ "$format" = "table" ]; then
   done
 
   if [ "$has_any_failures" -eq 0 ]; then
-     echo "Die DNS-Antworten wurden mit DNSSEC (alle Algorithmen) erfolgreich authentifiziert."
+     echo "Die DNS-Antworten wurden mit DNSSEC (ECDSA P-256, ECDSA P-384 & Ed25519) erfolgreich authentifiziert."
      echo ""
   fi
 fi
