@@ -187,13 +187,26 @@ sort_rows() {
 
 print_table() {
   echo ""
-  local my_ipv4 my_ipv6
+  local my_ipv4 my_ipv6 my_ipv4_ptr my_ipv6_ptr
   my_ipv4=$(curl -s -m 2 https://myipv4.addr.tools/plain 2>/dev/null || echo "Not available")
   my_ipv6=$(curl -s -m 2 https://myipv6.addr.tools/plain 2>/dev/null || echo "Not available")
 
+  my_ipv4_ptr="Not available"
+  my_ipv6_ptr="Not available"
+
+  if [[ "$my_ipv4" != "Not available" ]]; then
+    my_ipv4_ptr=$($dig_cmd -x "$my_ipv4" +short 2>/dev/null | tail -n1 | sed 's/\.$//' || true)
+    [[ -z "$my_ipv4_ptr" ]] && my_ipv4_ptr="Not available"
+  fi
+
+  if [[ "$my_ipv6" != "Not available" ]]; then
+    my_ipv6_ptr=$($dig_cmd -x "$my_ipv6" +short 2>/dev/null | tail -n1 | sed 's/\.$//' || true)
+    [[ -z "$my_ipv6_ptr" ]] && my_ipv6_ptr="Not available"
+  fi
+
   echo "Your public IP:"
-  echo "- IPv4: $my_ipv4"
-  echo "- IPv6: $my_ipv6" 
+  echo "- IPv4: $my_ipv4 (PTR: $my_ipv4_ptr)"
+  echo "- IPv6: $my_ipv6 (PTR: $my_ipv6_ptr)" 
   echo ""
 
   # Table Header
@@ -234,7 +247,7 @@ print_table() {
     printf "\n\033[1m--- DNSSEC Audit Failures ---\033[0m\n"
     cat "$TMP_DIR"/*_audit.txt
   else
-    printf "\n\e[32mAll DNS responses were successfully authenticated using DNSSEC (ECDSA P-256, ECDSA P-384 & Ed25519).\e[0m\n"
+    printf "\nAll DNS responses were successfully authenticated using DNSSEC (ECDSA P-256, ECDSA P-384 & Ed25519).\n"
   fi
 }
 
