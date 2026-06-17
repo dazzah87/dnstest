@@ -142,19 +142,39 @@ print_table() {
   echo ""
   my_ipv4=$(curl -s -m 2 https://myipv4.addr.tools/plain 2>/dev/null || echo "Not available")
   my_ipv6=$(curl -s -m 2 https://myipv6.addr.tools/plain 2>/dev/null || echo "Not available")
-  current_resolver=$($dig_cmd +short whoami.akamai.net 2>/dev/null | tail -n 1 || true)
-  [ -z "$current_resolver" ] && current_resolver="Not available"
 
   echo "Your public IP:"
   echo "- IPv4: $my_ipv4"
-  echo "- IPv6: $my_ipv6"
+  echo "- IPv6: $my_ipv6" 
   echo ""
-  echo "Your DNS resolver: $current_resolver"
-  echo ""
+  echo "Current DNS Resolvers:"
+
+  # Abfrage der Resolver-IPs (filtert Subnetz-Daten heraus und behält nur saubere IPs)
+  resolver_ips=$({
+    $dig_cmd +short whoami.akamai.net A 2>/dev/null || true
+    $dig_cmd +short o-o.myaddr.l.google.com TXT 2>/dev/null | tr -d '"' || true
+  } | grep -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$|^[0-9a-fA-F:]+:[0-9a-fA-F:]+$' | sort -u)
+
+  if [ -n "$resolver_ips" ]; then
+    for ip in $resolver_ips; do
+      # PTR Record (Reverse DNS) abfragen
+      ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || true)
+      [ -n "$ptr" ] && ptr="${ptr%.}" || ptr="N/A"
+      
+      if [[ "$ip" == *":"* ]]; then
+        echo "- IPv6: $ip (PTR: $ptr)"
+      else
+        echo "- IPv4: $ip (PTR: $ptr)"
+      fi
+    done
+  else
+    echo "- Not available"
+  fi
+  echo "" 
 
   printf "%-21s" "Provider"
   for ((i=1; i<=totaldomains; i++)); do printf "%-10s" "Test$i"; done
-  printf "%-10s %s\n" "Average" "DNSSEC"
+  printf "%-10s %-7s\n" "Average" "DNSSEC"
 
   while IFS= read -r row; do
     [ -z "$row" ] && continue
