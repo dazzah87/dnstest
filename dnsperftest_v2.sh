@@ -150,17 +150,6 @@ test_provider_worker() {
   avg=$(awk -v ftime="$ftime" -v total="$totaldomains" 'BEGIN {printf "%.2f", ftime/total}')
   row="${row}|${avg}"
 
-  local dnssec="No" chk_valid chk_bad
-  chk_valid=$($dig_cmd +short +tries=1 +time=2 @"$pip" test.dnscheck.tools A 2>/dev/null || true)
-  
-  if [[ -n "$chk_valid" ]]; then
-    chk_bad=$($dig_cmd +short +tries=1 +time=2 @"$pip" badsig.test.dnscheck.tools A 2>/dev/null || true)
-    [[ -z "$chk_bad" ]] && dnssec="Yes"
-  else
-    dnssec="Err"
-  fi
-  row="${row}|${dnssec}"
-
   local audit_fails
   audit_fails=$(run_dnssec_audit_silent "$pip")
   if [[ -n "$audit_fails" ]]; then
@@ -199,7 +188,7 @@ print_table() {
 
   printf "\033[1m%-16s %-24s\e[0m" "Provider" "IP"
   for ((i=1; i<=totaldomains; i++)); do printf "\e[1m%-8s\e[0m" "Test$i"; done
-  printf "\033[1m%-8s %-7s\e[0m\n" "Average" "DNSSEC"
+  printf "\033[1m%-8s\e[0m\n" "Average"
 
   while IFS= read -r row; do
     [[ -z "$row" ]] && continue
@@ -207,14 +196,7 @@ print_table() {
     
     printf "%-16s %-24s" "${parts[0]}" "${parts[1]}"
     for ((i=1; i<=totaldomains; i++)); do printf "%-8s" "${parts[i+1]}ms"; done
-    printf "%-8s " "${parts[totaldomains+2]}"
-    
-    local dnssec_val="${parts[totaldomains+3]}"
-    case "$dnssec_val" in
-      *Yes*) printf "\e[32m%s\e[0m\n" "$dnssec_val" ;;
-      *No*)  printf "\e[31m%s\e[0m\n" "$dnssec_val" ;;
-      *)     printf "%s\n" "$dnssec_val" ;;
-    esac
+    printf "%-8s\n" "${parts[totaldomains+2]}"
   done < <(echo "$rows" | sort_rows)
 
   local audit_files=("$TMP_DIR"/*_audit.txt)
@@ -223,9 +205,12 @@ print_table() {
     cat "$TMP_DIR"/*_audit.txt
   else
     printf "\nGreat! All DNS responses were successfully authenticated using DNSSEC.\n\n"
-    printf "%-15s \e[32mPASS\e[0m\n" "ECDSA P-256"
-    printf "%-15s \e[32mPASS\e[0m\n" "ECDSA P-384"
-    printf "%-15s \e[32mPASS\e[0m\n" "Ed25519"
+    printf "                    ECDSA      ECDSA\n"
+    printf "                    P-256      P-384      Ed25519\n"
+    printf "Valid signature     \e[32mPASS\e[0m       \e[32mPASS\e[0m       \e[32mPASS\e[0m\n"
+    printf "Invalid signature   \e[32mPASS\e[0m       \e[32mPASS\e[0m       \e[32mPASS\e[0m\n"
+    printf "Expired signature   \e[32mPASS\e[0m       \e[32mPASS\e[0m       \e[32mPASS\e[0m\n"
+    printf "Missing signature   \e[32mPASS\e[0m       \e[32mPASS\e[0m       \e[32mPASS\e[0m\n"
     printf "\n"
   fi
 }
@@ -233,7 +218,7 @@ print_table() {
 print_csv() {
   printf "provider,ip"
   for ((i=1; i<=totaldomains; i++)); do printf ",test%d" "$i"; done
-  printf ",average,dnssec\n"
+  printf ",average\n"
   while IFS= read -r row; do 
     [[ -n "$row" ]] && echo "${row//|/,}"
   done < <(echo "$rows" | sort_rows)
@@ -242,7 +227,7 @@ print_csv() {
 print_tsv() {
   printf "provider\tip"
   for ((i=1; i<=totaldomains; i++)); do printf "\ttest%d" "$i"; done
-  printf "\taverage\tdnssec\n"
+  printf "\taverage\n"
   while IFS= read -r row; do 
     [[ -n "$row" ]] && printf '%s\n' "$row" | tr '|' '\t'
   done < <(echo "$rows" | sort_rows)
@@ -263,7 +248,7 @@ print_json() {
       [[ "$i" -eq 1 ]] || printf ','
       printf '%s' "${parts[i+1]}"
     done
-    printf '],"average":%s,"dnssec":"%s"}' "${parts[totaldomains+2]}" "${parts[totaldomains+3]}"
+    printf '],"average":%s}' "${parts[totaldomains+2]}"
   done < <(echo "$rows" | sort_rows)
   printf '\n]\n'
 }
