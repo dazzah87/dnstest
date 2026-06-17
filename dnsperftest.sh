@@ -149,19 +149,17 @@ print_table() {
   echo ""
   echo "Your DNS resolvers:"
 
-  resolver_ips=$({
-    $dig_cmd +short -t A whoami.akamai.net 2>/dev/null || true
-    $dig_cmd +short -t AAAA ipv6.test-ipv6.com 2>/dev/null || true
-    $dig_cmd +short -t TXT o-o.myaddr.l.google.com 2>/dev/null | tr -d '"' || true
-  } | grep -E '([0-9]{1,3}\.){3}[0-9]{1,3}|[0-9a-fA-F:]+:[0-9a-fA-F:]+' | sort -u)
+  resolver_ips=$(scutil --dns | grep 'nameserver' | awk '{print $3}' | sort -u)
 
   if [ -n "$resolver_ips" ]; then
     while read -r ip; do
       [ -z "$ip" ] && continue
+      # PTR Record (Reverse DNS) abfragen
       ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || true)
       [ -n "$ptr" ] && ptr="${ptr%.}" || ptr="N/A"
       
-      if [[ "$ip" == *":"* ]]; then
+      # Anzeige für IPv4/IPv6
+      if [[ "$ip" =~ ":" ]]; then
         echo "- IPv6: $ip ($ptr)"
       else
         echo "- IPv4: $ip ($ptr)"
