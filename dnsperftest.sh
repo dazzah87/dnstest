@@ -149,18 +149,23 @@ print_table() {
   echo ""
   echo "Your DNS resolvers:"
 
+  # Explizite getrennte Abfragen für IPv4 und IPv6, um das System zu zwingen, beide zu listen
+  # Wir nutzen 'dig -4' und 'dig -6' um sicherzugehen, dass wir beides erhalten
   resolver_ips=$({
-    $dig_cmd +short -t A whoami.akamai.net 2>/dev/null
-    $dig_cmd +short -t AAAA whoami.akamai.net 2>/dev/null
-    $dig_cmd +short -t TXT o-o.myaddr.l.google.com 2>/dev/null | tr -d '"'
+    $dig_cmd +short -4 whoami.akamai.net A 2>/dev/null 2>&1
+    $dig_cmd +short -4 whoami.akamai.net A || true
+    $dig_cmd +short -6 whoami.akamai.net AAAA || true
+    $dig_cmd +short -t TXT o-o.myaddr.l.google.com | tr -d '"' || true
   } | grep -E '([0-9]{1,3}\.){3}[0-9]{1,3}|[0-9a-fA-F:]+:[0-9a-fA-F:]+' | sort -u)
 
   if [ -n "$resolver_ips" ]; then
     while read -r ip; do
       [ -z "$ip" ] && continue
+      # PTR Record abfragen
       ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || true)
       [ -n "$ptr" ] && ptr="${ptr%.}" || ptr="N/A"
       
+      # Anzeige formatieren
       printf -- "- %-45s (ptr: %s)\n" "$ip" "$ptr"
     done <<< "$resolver_ips"
   else
