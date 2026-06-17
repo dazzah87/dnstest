@@ -28,7 +28,6 @@ EOF2
 }
 
 PROVIDERSV4="
-1.1.1.1#Cloudflare
 8.8.8.8#Google
 188.34.161.210#HaGeZi-Root
 159.69.155.94#HaGeZi-Wurzn
@@ -37,7 +36,6 @@ PROVIDERSV4="
 "
 
 PROVIDERSV6="
-2606:4700:4700::1111#Cloudflare-v6
 2001:4860:4860::8888#Google-v6
 2a01:4f8:c17:1c66::1#HaGeZi-Root-v6
 2a01:4f8:1c1c:d363::1#HaGeZi-Wurzn-v6
