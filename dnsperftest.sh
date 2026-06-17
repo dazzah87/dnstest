@@ -149,6 +149,8 @@ print_table() {
   echo ""
   echo "Your DNS resolvers:"
 
+  # Resolver-Erkennung für IPv4 und IPv6 (getrennte Abfragen)
+  # Wir sammeln alles, was eine IP-Adresse ist
   resolver_ips=$({
     $dig_cmd +short whoami.akamai.net A 2>/dev/null || true
     $dig_cmd +short whoami.akamai.net AAAA 2>/dev/null || true
@@ -156,15 +158,18 @@ print_table() {
   } | grep -E '([0-9]{1,3}\.){3}[0-9]{1,3}|[0-9a-fA-F:]+:[0-9a-fA-F:]+' | sort -u)
 
   if [ -n "$resolver_ips" ]; then
-    for ip in $resolver_ips; do
+    while read -r ip; do
+      [ -z "$ip" ] && continue
       ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || true)
       [ -n "$ptr" ] && ptr="${ptr%.}" || ptr="N/A"
-      
-      printf "  %-40s ptr: %s\n" "$ip" "$ptr"
-    done
+      # Ausgabe exakt mit Klammern, wie gewünscht
+      echo "- IPv$( [[ "$ip" =~ ":" ]] && echo "6" || echo "4" ): $ip ($ptr)"
+    done <<< "$resolver_ips"
   else
-    echo "  - Not available"
+    echo "- Not available"
   fi
+  
+  echo "" 
 
   printf "%-21s" "Provider"
   for ((i=1; i<=totaldomains; i++)); do printf "%-10s" "Test$i"; done
