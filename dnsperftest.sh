@@ -147,8 +147,20 @@ print_table() {
   echo "- IPv4: $my_ipv4"
   echo "- IPv6: $my_ipv6" 
   echo ""
-  echo "Your DNS resolvers:"
 
+  echo "System/Browser DNS (Native/DoH):"
+  # Nutzt curl (was macOS DoH Profile respektiert), um den Status bei NextDNS abzufragen
+  nextdns_check=$(curl -s -m 2 https://test.nextdns.io 2>/dev/null || true)
+  if [[ "$nextdns_check" == *"\"status\": \"ok\""* ]]; then
+    nextdns_ip=$(echo "$nextdns_check" | grep -o '"destIP": *"[^"]*"' | cut -d'"' -f4 || echo "N/A")
+    echo "- $nextdns_ip (nextdns.io)"
+  else
+    echo "- No native DoH / NextDNS detected"
+  fi
+  echo ""
+
+  echo "Terminal DNS (Raw Network Settings):"
+  # Nutzt dig (was macOS DoH umgeht und roh das WLAN/LAN abfragt)
   resolver_ips=$({
     $dig_cmd +short whoami.akamai.net A 2>/dev/null || true
     $dig_cmd +short o-o.myaddr.l.google.com TXT 2>/dev/null | tr -d '"' || true
@@ -160,9 +172,9 @@ print_table() {
       [ -n "$ptr" ] && ptr="${ptr%.}" || ptr="N/A"
       
       if [[ "$ip" == *":"* ]]; then
-        echo "- IPv6: $ip ($ptr)"
+        echo "- IPv6: $ip (PTR: $ptr)"
       else
-        echo "- IPv4: $ip ($ptr)"
+        echo "- IPv4: $ip (PTR: $ptr)"
       fi
     done
   else
