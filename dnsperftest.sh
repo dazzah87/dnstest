@@ -146,37 +146,26 @@ print_table() {
   echo "- IPv6: $my_ipv6" 
   echo ""
   echo "Your DNS resolvers:"
+  
+  ipv4_resolver=$($dig_cmd +short -t A whoami.akamai.net 2>/dev/null | head -n1)
+  ipv6_resolver=$($dig_cmd +short -t AAAA ipv6.test-ipv6.com 2>/dev/null | head -n1)
 
-  resolver_ips_v4=""
-  resolver_ips_v6=""
-
-  # IPv4 Abfrage
-  resolver_ips_v4=$($dig_cmd +short -4 -t A whoami.akamai.net 2>/dev/null || true)
-  # IPv6 Abfrage
-  resolver_ips_v6=$($dig_cmd +short -6 -t AAAA whoami.akamai.net 2>/dev/null || true)
-
-  if [ -n "$resolver_ips_v4" ]; then
-    while read -r ip; do
-      [ -z "$ip" ] && continue
-      ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || echo "N/A")
-      printf -- "- IPv4: %-38s (%s)\n" "$ip" "${ptr%.}"
-    done <<< "$resolver_ips_v4"
+  if [ -n "$ipv4_resolver" ]; then
+    ptr=$($dig_cmd +short -x "$ipv4_resolver" 2>/dev/null | tail -n 1 || echo "N/A")
+    printf -- "- IPv4: %-38s (%s)\n" "$ipv4_resolver" "${ptr%.}"
   fi
 
-  if [ -n "$resolver_ips_v6" ]; then
-    while read -r ip; do
-      [ -z "$ip" ] && continue
-      ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || echo "N/A")
-      printf -- "- IPv6: %-38s (%s)\n" "$ip" "${ptr%.}"
-    done <<< "$resolver_ips_v6"
+  if [ -n "$ipv6_resolver" ]; then
+    ptr=$($dig_cmd +short -x "$ipv6_resolver" 2>/dev/null | tail -n 1 || echo "N/A")
+    printf -- "- IPv6: %-38s (%s)\n" "$ipv6_resolver" "${ptr%.}"
   fi
 
-  if [ -z "$resolver_ips_v4" ] && [ -z "$resolver_ips_v6" ]; then
+  if [ -z "$ipv4_resolver" ] && [ -z "$ipv6_resolver" ]; then
     echo "- Not available"
   fi
   
   echo ""
-  
+
   printf "%-21s" "Provider"
   for ((i=1; i<=totaldomains; i++)); do printf "%-10s" "Test$i"; done
   printf "%-10s %-7s\n" "Average" "DNSSEC"
