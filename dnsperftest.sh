@@ -123,7 +123,7 @@ for p in $providerstotest; do
     chk_bad=$($dig_cmd +short +tries=1 +time=2 @"$pip" badsig.test.dnscheck.tools A 2>/dev/null || true)
     if [ -z "$chk_bad" ]; then dnssec="Yes"; fi
   else
-    dnssec="⚠️ Err"
+    dnssec="Err"
   fi
   row="${row}|${dnssec}"
 
