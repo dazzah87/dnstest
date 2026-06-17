@@ -258,7 +258,7 @@ if [ "$format" = "table" ]; then
   best_row=$(printf '%s\n' "$rows" | sort -t '|' -k"$((totaldomains + 2))","$((totaldomains + 2))"n | head -n 1)
   IFS='|' read -r -a best_parts <<< "$best_row"
   echo ""
-  echo "Bester DNS-Anbieter für dein Netzwerk: ${best_parts[0]}"
+  echo "Best DNS provider for your network: ${best_parts[0]}"
   echo ""
 
   has_any_failures=0
@@ -272,7 +272,7 @@ if [ "$format" = "table" ]; then
     provider_fails=$(run_dnssec_audit_silent "$pip" "$pname")
     
     if [ -n "$provider_fails" ]; then
-       echo "Sicherheitslücke bei $pname ($pip):"
+       echo "Security vulnerability in $pname ($pip):"
        echo "$provider_fails"
        echo ""
        has_any_failures=1
@@ -280,7 +280,7 @@ if [ "$format" = "table" ]; then
   done
 
   if [ "$has_any_failures" -eq 0 ]; then
-     echo "Die DNS-Antworten wurden mit DNSSEC (ECDSA P-256, ECDSA P-384 & Ed25519) erfolgreich authentifiziert."
+     echo "The DNS responses were successfully authenticated using DNSSEC (ECDSA P-256, ECDSA P-384, and Ed25519)."
      echo ""
   fi
 fi
