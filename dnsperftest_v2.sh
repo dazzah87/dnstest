@@ -214,7 +214,7 @@ print_table() {
     printf "\n\033[1m--- DNSSEC Audit Failures ---\033[0m\n"
     cat "$TMP_DIR"/*_audit.txt
   else
-    printf "\n\033[32mAll DNS responses successfully authenticated via DNSSEC.\033[0m\n"
+    printf "\n\e[32mAll DNS responses were successfully authenticated using DNSSEC (ECDSA P-256, ECDSA P-384 & Ed25519).\e[0m\n"
   fi
 }
 
