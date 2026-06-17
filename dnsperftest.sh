@@ -149,8 +149,8 @@ print_table() {
   echo ""
   echo "Your DNS resolvers:"
 
-  # Resolver-Erkennung für IPv4 und IPv6 (getrennte Abfragen)
-  # Wir sammeln alles, was eine IP-Adresse ist
+  # Korrigierte Resolver-Erkennung für IPv4 UND IPv6
+  # Wir fragen nun explizit nach A (IPv4) und AAAA (IPv6)
   resolver_ips=$({
     $dig_cmd +short whoami.akamai.net A 2>/dev/null || true
     $dig_cmd +short whoami.akamai.net AAAA 2>/dev/null || true
@@ -162,15 +162,20 @@ print_table() {
       [ -z "$ip" ] && continue
       ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || true)
       [ -n "$ptr" ] && ptr="${ptr%.}" || ptr="N/A"
-      # Ausgabe exakt mit Klammern, wie gewünscht
-      echo "- IPv$( [[ "$ip" =~ ":" ]] && echo "6" || echo "4" ): $ip ($ptr)"
+      
+      # Automatische Unterscheidung IPv4/IPv6 in der Anzeige
+      if [[ "$ip" == *":"* ]]; then
+        echo "- IPv6: $ip ($ptr)"
+      else
+        echo "- IPv4: $ip ($ptr)"
+      fi
     done <<< "$resolver_ips"
   else
     echo "- Not available"
   fi
   
   echo "" 
-
+  
   printf "%-21s" "Provider"
   for ((i=1; i<=totaldomains; i++)); do printf "%-10s" "Test$i"; done
   printf "%-10s %-7s\n" "Average" "DNSSEC"
