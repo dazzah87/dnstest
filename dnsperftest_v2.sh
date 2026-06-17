@@ -39,7 +39,6 @@ PROVIDERSV4="
 8.8.8.8#Google
 188.34.161.210#HaGeZi-Root
 159.69.155.94#HaGeZi-Wurzn
-45.90.28.0#NextDNS
 86.54.11.11#DNS4EU
 "
 
@@ -47,7 +46,6 @@ PROVIDERSV6="
 2001:4860:4860::8888#Google-v6
 2a01:4f8:c17:1c66::1#HaGeZi-Root-v6
 2a01:4f8:1c1c:d363::1#HaGeZi-Wurzn-v6
-2a07:a8c0::#NextDNS-v6
 2a13:1001::86:54:11:11#DNS4EU-v6
 "
 
@@ -191,7 +189,6 @@ test_provider_worker() {
 # ==============================================================================
 
 sort_rows() {
-  # Sort by Average which is at index (totaldomains + 3) in the 1-based awk/sort logic
   local col_idx=$((totaldomains + 3))
   if [[ "$sort_mode" == "fastest" ]]; then
     sort -t '|' -k"${col_idx},${col_idx}n"
@@ -214,7 +211,6 @@ print_table() {
   echo "- IPv6: $my_ipv6 ($my_ipv6_info)" 
   echo ""
 
-  # Calculate dynamic widths
   local max_prov_len=8
   local max_ip_len=2
   local min_avg=999999
@@ -239,12 +235,10 @@ print_table() {
   local prov_pad=$((max_prov_len + 2))
   local ip_pad=$((max_ip_len + 2))
 
-  # Print Header dynamically
   printf "\033[1m%-${prov_pad}s %-${ip_pad}s\e[0m" "Provider" "IP"
   for ((i=1; i<=totaldomains; i++)); do printf "\e[1m%-8s\e[0m" "Test$i"; done
   printf "\033[1m%-8s %-8s\e[0m\n" "Average" "ECS"
 
-  # Print Rows
   while IFS= read -r row; do
     [[ -z "$row" ]] && continue
     IFS='|' read -r -a parts <<< "$row"
@@ -267,12 +261,11 @@ print_table() {
     printf "%-8s ${c_ecs}%-8s${c_end}\n" "${parts[totaldomains+2]}" "$ecs_val"
   done < <(echo "$rows" | sort_rows)
 
-  # Print DNSSEC Block
   if ls "$TMP_DIR"/*_audit.txt 1> /dev/null 2>&1; then
     printf "\n\033[1m--- DNSSEC Audit Failures ---\033[0m\n"
     cat "$TMP_DIR"/*_audit.txt
   else
-    printf "\nGreat! All DNS responses were successfully authenticated using DNSSEC.\n\n"
+    printf "\nGreat! All DNS responses were successfully authenticated using DNSSEC:\n\n"
     printf "%-20s%-16s%-16s%s\n" "" "ECDSA P-256" "ECDSA P-384" "Ed25519"
     printf "%-20s\e[32mPASS\e[0m            \e[32mPASS\e[0m            \e[32mPASS\e[0m\n" "Valid signature"
     printf "%-20s\e[32mPASS\e[0m            \e[32mPASS\e[0m            \e[32mPASS\e[0m\n" "Invalid signature"
@@ -360,7 +353,6 @@ case "$mode" in
     ;;
 esac
 
-# Start IP check in background immediately to save execution time
 fetch_user_ips &
 
 for p in $providerstotest; do
@@ -374,7 +366,6 @@ done
 
 wait
 
-# Safely gather results
 rows=$(cat "$TMP_DIR"/*.res 2>/dev/null || true)
 
 case "$format" in
