@@ -296,7 +296,7 @@ if [ "$format" = "table" ]; then
   done
 
   if [ "$has_any_failures" -eq 0 ]; then
-     echo "The DNS responses were successfully authenticated using DNSSEC (ECDSA P-256, ECDSA P-384 & Ed25519)."
+     echo "All DNS responses were successfully authenticated using DNSSEC (ECDSA P-256, ECDSA P-384 & Ed25519)."
      echo ""
   fi
 fi
