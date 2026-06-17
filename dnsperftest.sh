@@ -188,4 +188,108 @@ print_csv() {
 
 print_tsv() {
   printf "provider"
-  for ((i=1; i<=totaldomains; i++)); do printf "\ttest%d"
+  for ((i=1; i<=totaldomains; i++)); do printf "\ttest%d" "$i"; done
+  printf "\taverage\tdnssec\n"
+  while IFS= read -r row; do [ -z "$row" ] && continue; printf "%s\n" "$(printf '%s' "$row" | tr '|' '\t')"; done < <(sort_rows)
+}
+
+print_json() {
+  printf '[\n'
+  first=1
+  while IFS= read -r row; do
+    [ -z "$row" ] && continue
+    IFS='|' read -r -a parts <<< "$row"
+    [ "$first" -eq 1 ] || printf ',\n'
+    first=0
+    printf '  {"provider":"%s","results":[' "${parts[0]}"
+    for ((i=1; i<=totaldomains; i++)); do
+      [ "$i" -eq 1 ] || printf ','
+      printf '%s' "${parts[i]}"
+    done
+    printf '],"average":"%s","dnssec":"%s"}' "${parts[totaldomains+1]}" "${parts[totaldomains+2]}"
+  done < <(sort_rows)
+  printf '\n]\n'
+}
+
+run_dnssec_audit_silent() {
+  local pip=$1
+  local pname=$2
+  local fails=""
+
+  local tests=(
+    "Valid signature:test:YES"
+    "Invalid signature:badsig.test:NO"
+    "Expired signature:expiredsig.test:NO"
+    "Missing signature:nosig.test:NO"
+  )
+  
+  local algos=("alg13:ECDSA P-256" "alg14:ECDSA P-384" "alg15:Ed25519")
+
+  for t in "${tests[@]}"; do
+    IFS=':' read -r test_name prefix expect <<< "$t"
+
+    for a_info in "${algos[@]}"; do
+      IFS=':' read -r a a_name <<< "$a_info"
+      domain="${prefix}-${a}.dnscheck.tools"
+      
+      res=$($dig_cmd +short +tries=1 +time=2 @"$pip" "$domain" A 2>/dev/null || true)
+
+      status="FAIL"
+      if [ "$expect" = "YES" ]; then
+        if [ -n "$res" ]; then status="PASS"; fi
+      else
+        if [ -z "$res" ]; then status="PASS"; fi
+      fi
+
+      if [ "$status" = "FAIL" ]; then
+        if [ -z "$fails" ]; then
+          fails="  - $test_name ($a_name)"
+        else
+          fails+=$'\n'"  - $test_name ($a_name)"
+        fi
+      fi
+    done
+  done
+  
+  echo "$fails"
+}
+
+case "$format" in
+  table) print_table ;;
+  csv)   print_csv ;;
+  tsv)   print_tsv ;;
+  json)  print_json ;;
+esac
+
+if [ "$format" = "table" ]; then
+  best_row=$(printf '%s\n' "$rows" | sort -t '|' -k"$((totaldomains + 2))","$((totaldomains + 2))"n | head -n 1)
+  IFS='|' read -r -a best_parts <<< "$best_row"
+  echo ""
+  echo "Best DNS provider for your network: ${best_parts[0]}"
+  echo ""
+
+  has_any_failures=0
+
+  for p in $providerstotest; do
+    [ -z "$p" ] && continue
+    pip=${p%%#*}
+    pname=${p##*#}
+    [ -z "$pname" ] && pname="$pip"
+    
+    provider_fails=$(run_dnssec_audit_silent "$pip" "$pname")
+    
+    if [ -n "$provider_fails" ]; then
+       echo "Security vulnerability in $pname ($pip):"
+       echo "$provider_fails"
+       echo ""
+       has_any_failures=1
+    fi
+  done
+
+  if [ "$has_any_failures" -eq 0 ]; then
+     echo "The DNS responses were successfully authenticated using DNSSEC (ECDSA P-256, ECDSA P-384 & Ed25519)."
+     echo ""
+  fi
+fi
+
+exit 0
