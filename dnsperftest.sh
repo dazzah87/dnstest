@@ -164,7 +164,7 @@ print_table() {
       fi
     done <<< "$resolver_ips"
   else
-    echo "- No external DNS resolvers detected."
+    echo "- Not available."
   fi
   
   echo "" 
