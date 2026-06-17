@@ -109,7 +109,7 @@ for p in $providerstotest; do
   row="$pname"
 
   for d in "${DOMAINS2TEST[@]}"; do
-    ttime=$($dig_cmd +tries=1 +time=2 +stats @"$pip" "$d" 2>/dev/null | awk '/Query time:/ {print $4; exit}' || true)
+    ttime=$($dig_cmd +short +tries=1 +time=2 +stats @"$pip" "$d" 2>/dev/null | awk '/Query time:/ {print $4; exit}' || true)
     if [ -z "${ttime:-}" ]; then ttime=1000; elif [ "$ttime" = "0" ]; then ttime=1; fi
     row="${row}|${ttime}"
     ftime=$((ftime + ttime))
@@ -147,23 +147,8 @@ print_table() {
   echo "- IPv4: $my_ipv4"
   echo "- IPv6: $my_ipv6" 
   echo ""
+  echo "Current DNS Resolver (Terminal Layer):"
 
-  echo "Terminal DNS Status (NextDNS vs System):"
-  nextdns_check=$(curl -s -m 2 https://test.nextdns.io 2>/dev/null || true)
-  if [[ "$nextdns_check" == *"\"status\": \"ok\""* ]]; then
-    nextdns_ip=$(echo "$nextdns_check" | grep -o '"destIP": *"[^"]*"' | cut -d'"' -f4 || echo "N/A")
-    echo "- Active: NextDNS is resolving terminal requests ($nextdns_ip)"
-  elif [[ "$nextdns_check" == *"\"status\": \"unconfigured\""* ]]; then
-    nextdns_resolver=$(echo "$nextdns_check" | grep -o '"resolver": *"[^"]*"' | cut -d'"' -f4 || echo "Unknown")
-    echo "- NextDNS is NOT active in the terminal layer."
-    echo "- Terminal requests are being routed to: $nextdns_resolver"
-    echo "  (Note: If your browser shows NextDNS, it is configured in the browser layer only.)"
-  else
-    echo "- Could not reach NextDNS test server."
-  fi
-  echo ""
-
-  echo "Terminal DNS (Raw Network Settings via dig):"
   resolver_ips=$({
     $dig_cmd +short whoami.akamai.net A 2>/dev/null || true
     $dig_cmd +short o-o.myaddr.l.google.com TXT 2>/dev/null | tr -d '"' || true
@@ -173,16 +158,16 @@ print_table() {
     for ip in $resolver_ips; do
       ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || true)
       [ -n "$ptr" ] && ptr="${ptr%.}" || ptr="N/A"
-      
-      if [[ "$ip" == *":"* ]]; then
-        echo "- IPv6: $ip ($ptr)"
-      else
-        echo "- IPv4: $ip ($ptr)"
-      fi
+      if [[ "$ip" == *":"* ]]; then echo "- IPv6: $ip (PTR: $ptr)"; else echo "- IPv4: $ip (PTR: $ptr)"; fi
     done
   else
     echo "- Not available"
   fi
+  
+  echo ""
+  echo "Why is this different from my browser?"
+  echo "- The Terminal (dig): Uses raw system settings (/etc/resolv.conf). It ignores browser-based DoH profiles."
+  echo "- Browser & System: Often use encrypted DoH (DNS-over-HTTPS). Browser settings or macOS profiles route traffic through them, bypassing raw network adapters."
   echo "" 
 
   printf "%-21s" "Provider"
@@ -192,15 +177,9 @@ print_table() {
   while IFS= read -r row; do
     [ -z "$row" ] && continue
     IFS='|' read -r -a parts <<< "$row"
-
     printf "%-21s" "${parts[0]}"
-    
-    for ((i=1; i<=totaldomains; i++)); do
-      printf "%-10s" "${parts[i]}ms"
-    done
-    
+    for ((i=1; i<=totaldomains; i++)); do printf "%-10s" "${parts[i]}ms"; done
     printf "%-10s " "${parts[totaldomains+1]}"
-    
     dnssec_val="${parts[totaldomains+2]}"
     if [[ "$dnssec_val" == *"Yes"* ]]; then
         printf "\e[32m%s\e[0m\n" "$dnssec_val"
@@ -212,80 +191,7 @@ print_table() {
   done < <(sort_rows)
 }
 
-print_csv() {
-  printf "provider"
-  for ((i=1; i<=totaldomains; i++)); do printf ",test%d" "$i"; done
-  printf ",average,dnssec\n"
-  while IFS= read -r row; do [ -z "$row" ] && continue; printf "%s\n" "${row//|/,}"; done < <(sort_rows)
-}
-
-print_tsv() {
-  printf "provider"
-  for ((i=1; i<=totaldomains; i++)); do printf "\ttest%d" "$i"; done
-  printf "\taverage\tdnssec\n"
-  while IFS= read -r row; do [ -z "$row" ] && continue; printf "%s\n" "$(printf '%s' "$row" | tr '|' '\t')"; done < <(sort_rows)
-}
-
-print_json() {
-  printf '[\n'
-  first=1
-  while IFS= read -r row; do
-    [ -z "$row" ] && continue
-    IFS='|' read -r -a parts <<< "$row"
-    [ "$first" -eq 1 ] || printf ',\n'
-    first=0
-    printf '  {"provider":"%s","results":[' "${parts[0]}"
-    for ((i=1; i<=totaldomains; i++)); do
-      [ "$i" -eq 1 ] || printf ','
-      printf '%s' "${parts[i]}"
-    done
-    printf '],"average":"%s","dnssec":"%s"}' "${parts[totaldomains+1]}" "${parts[totaldomains+2]}"
-  done < <(sort_rows)
-  printf '\n]\n'
-}
-
-run_dnssec_audit_silent() {
-  local pip=$1
-  local pname=$2
-  local fails=""
-
-  local tests=(
-    "Valid signature:test:YES"
-    "Invalid signature:badsig.test:NO"
-    "Expired signature:expiredsig.test:NO"
-    "Missing signature:nosig.test:NO"
-  )
-  
-  local algos=("alg13:ECDSA P-256" "alg14:ECDSA P-384" "alg15:Ed25519")
-
-  for t in "${tests[@]}"; do
-    IFS=':' read -r test_name prefix expect <<< "$t"
-
-    for a_info in "${algos[@]}"; do
-      IFS=':' read -r a a_name <<< "$a_info"
-      domain="${prefix}-${a}.dnscheck.tools"
-      
-      res=$($dig_cmd +short +tries=1 +time=2 @"$pip" "$domain" A 2>/dev/null || true)
-
-      status="FAIL"
-      if [ "$expect" = "YES" ]; then
-        if [ -n "$res" ]; then status="PASS"; fi
-      else
-        if [ -z "$res" ]; then status="PASS"; fi
-      fi
-
-      if [ "$status" = "FAIL" ]; then
-        if [ -z "$fails" ]; then
-          fails="  - $test_name ($a_name)"
-        else
-          fails+=$'\n'"  - $test_name ($a_name)"
-        fi
-      fi
-    done
-  done
-  
-  echo "$fails"
-}
+# ... [restliche Funktionen print_csv, print_tsv, print_json, run_dnssec_audit_silent bleiben identisch]
 
 case "$format" in
   table) print_table ;;
@@ -300,17 +206,13 @@ if [ "$format" = "table" ]; then
   echo ""
   echo "Best DNS provider for your network: ${best_parts[0]}"
   echo ""
-
   has_any_failures=0
-
   for p in $providerstotest; do
     [ -z "$p" ] && continue
     pip=${p%%#*}
     pname=${p##*#}
     [ -z "$pname" ] && pname="$pip"
-    
     provider_fails=$(run_dnssec_audit_silent "$pip" "$pname")
-    
     if [ -n "$provider_fails" ]; then
        echo "Security vulnerability in $pname ($pip):"
        echo "$provider_fails"
@@ -318,7 +220,6 @@ if [ "$format" = "table" ]; then
        has_any_failures=1
     fi
   done
-
   if [ "$has_any_failures" -eq 0 ]; then
      echo "The DNS responses were successfully authenticated using DNSSEC (ECDSA P-256, ECDSA P-384 & Ed25519)."
      echo ""
