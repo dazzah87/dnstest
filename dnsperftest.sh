@@ -148,12 +148,21 @@ print_table() {
   echo "Your DNS resolvers:"
 
   uid=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 8)
-
-  resolver_ips=$({
-    $dig_cmd +short -t A "${uid}.whoami.akamai.net"
-    $dig_cmd +short -t AAAA "${uid}.whoami.akamai.net"
-    $dig_cmd +short -t TXT "o-o.myaddr.l.google.com" | tr -d '"'
-  } 2>/dev/null | grep -E '([0-9]{1,3}\.){3}[0-9]{1,3}|[0-9a-fA-F:]+:[0-9a-fA-F:]+' | sort -u)
+  
+  {
+    # IPv4-Check
+    for ip in $($dig_cmd +short -t A "${uid}.whoami.akamai.net" 2>/dev/null); do
+      ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || echo "N/A")
+      printf -- "- IPv4: %-38s (%s)\n" "$ip" "${ptr%.}"
+    done
+    
+    # IPv6-Check
+    for ip in $($dig_cmd +short -t AAAA "${uid}.whoami.akamai.net" 2>/dev/null); do
+      ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || echo "N/A")
+      printf -- "- IPv6: %-38s (%s)\n" "$ip" "${ptr%.}"
+    done
+  } | sort -u
+  echo ""
 
   if [ -n "$resolver_ips" ]; then
     while read -r ip; do
