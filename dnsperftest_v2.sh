@@ -122,7 +122,14 @@ test_provider_worker() {
   local pip=$1
   local pname=$2
   local ftime=0
-  local row="$pname"
+  
+  # Fetch PTR Record (Reverse DNS) and strip trailing dot
+  local ptr
+  ptr=$($dig_cmd -x "$pip" +short 2>/dev/null | tail -n1 | sed 's/\.$//' || true)
+  [[ -z "$ptr" ]] && ptr="N/A"
+
+  # Initialize row with Provider, IP, and PTR
+  local row="${pname}|${pip}|${ptr}"
 
   for d in "${DOMAINS2TEST[@]}"; do
     local ttime
@@ -169,7 +176,8 @@ test_provider_worker() {
 # ==============================================================================
 
 sort_rows() {
-  local col_idx=$((totaldomains + 2))
+  # Column index for average (3 meta fields + N domains + 1 for 1-based index)
+  local col_idx=$((totaldomains + 4))
   if [[ "$sort_mode" == "fastest" ]]; then
     sort -t '|' -k"${col_idx},${col_idx}n"
   else
@@ -188,19 +196,31 @@ print_table() {
   echo "- IPv6: $my_ipv6" 
   echo ""
 
-  printf "\033[1m%-21s\e[0m" "Provider"
-  for ((i=1; i<=totaldomains; i++)); do printf "\e[1m%-10s\e[0m" "Test$i"; done
-  printf "\033[1m%-10s %-7s\e[0m\n" "Average" "DNSSEC"
+  # Table Header
+  printf "\033[1m%-16s %-24s %-28s\e[0m" "Provider" "IP" "PTR"
+  for ((i=1; i<=totaldomains; i++)); do printf "\e[1m%-8s\e[0m" "Test$i"; done
+  printf "\033[1m%-8s %-7s\e[0m\n" "Average" "DNSSEC"
 
   while IFS= read -r row; do
     [[ -z "$row" ]] && continue
     IFS='|' read -r -a parts <<< "$row"
     
-    printf "%-21s" "${parts[0]}"
-    for ((i=1; i<=totaldomains; i++)); do printf "%-10s" "${parts[i]}ms"; done
-    printf "%-10s " "${parts[totaldomains+1]}"
+    # Truncate PTR if it gets too long for the table view
+    local d_ptr="${parts[2]}"
+    if [[ ${#d_ptr} -gt 26 ]]; then
+      d_ptr="${d_ptr:0:24}.."
+    fi
+
+    printf "%-16s %-24s %-28s" "${parts[0]}" "${parts[1]}" "$d_ptr"
     
-    local dnssec_val="${parts[totaldomains+2]}"
+    # Print domain test times
+    for ((i=1; i<=totaldomains; i++)); do printf "%-8s" "${parts[i+2]}ms"; done
+    
+    # Print Average
+    printf "%-8s " "${parts[totaldomains+3]}"
+    
+    # Print DNSSEC status
+    local dnssec_val="${parts[totaldomains+4]}"
     case "$dnssec_val" in
       *Yes*) printf "\e[32m%s\e[0m\n" "$dnssec_val" ;;
       *No*)  printf "\e[31m%s\e[0m\n" "$dnssec_val" ;;
@@ -208,7 +228,7 @@ print_table() {
     esac
   done < <(echo "$rows" | sort_rows)
 
-  # Append detailed audit findings if any exist (Only for Table format)
+  # Append detailed audit findings if any exist
   local audit_files=("$TMP_DIR"/*_audit.txt)
   if [[ -e "${audit_files[0]}" ]]; then
     printf "\n\033[1m--- DNSSEC Audit Failures ---\033[0m\n"
@@ -219,7 +239,7 @@ print_table() {
 }
 
 print_csv() {
-  printf "provider"
+  printf "provider,ip,ptr"
   for ((i=1; i<=totaldomains; i++)); do printf ",test%d" "$i"; done
   printf ",average,dnssec\n"
   while IFS= read -r row; do 
@@ -228,7 +248,7 @@ print_csv() {
 }
 
 print_tsv() {
-  printf "provider"
+  printf "provider\tip\tptr"
   for ((i=1; i<=totaldomains; i++)); do printf "\ttest%d" "$i"; done
   printf "\taverage\tdnssec\n"
   while IFS= read -r row; do 
@@ -246,12 +266,12 @@ print_json() {
     [[ "$first" -eq 1 ]] || printf ',\n'
     first=0
     
-    printf '  {"provider":"%s","results":[' "${parts[0]}"
+    printf '  {"provider":"%s","ip":"%s","ptr":"%s","results":[' "${parts[0]}" "${parts[1]}" "${parts[2]}"
     for ((i=1; i<=totaldomains; i++)); do
       [[ "$i" -eq 1 ]] || printf ','
-      printf '%s' "${parts[i]}"
+      printf '%s' "${parts[i+2]}"
     done
-    printf '],"average":%s,"dnssec":"%s"}' "${parts[totaldomains+1]}" "${parts[totaldomains+2]}"
+    printf '],"average":%s,"dnssec":"%s"}' "${parts[totaldomains+3]}" "${parts[totaldomains+4]}"
   done < <(echo "$rows" | sort_rows)
   printf '\n]\n'
 }
