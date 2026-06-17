@@ -262,7 +262,7 @@ if [ "$format" = "table" ]; then
   best_row=$(printf '%s\n' "$rows" | sort -t '|' -k"$((totaldomains + 2))","$((totaldomains + 2))"n | head -n 1)
   IFS='|' read -r -a best_parts <<< "$best_row"
   echo ""
-  echo "Bester DNS-Anbieter für dein Netzwerk: ${best_parts[0]} (Durchschnitt: ${best_parts[totaldomains+1]} ms)"
+  echo "Bester DNS-Anbieter für dein Netzwerk: ${best_parts[0]}"
   echo ""
 
   has_any_failures=0
