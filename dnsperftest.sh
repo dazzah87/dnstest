@@ -138,9 +138,9 @@ sort_rows() {
 
 print_table() {
   echo ""
-  my_ipv4=$(curl -s -m 2 https://myipv4.addr.tools/plain 2>/dev/null || echo "Nicht verfügbar")
-  my_ipv6=$(curl -s -m 2 https://myipv6.addr.tools/plain 2>/dev/null || echo "Nicht verfügbar")
-  echo "Öffentliche IP:"
+  my_ipv4=$(curl -s -m 2 https://myipv4.addr.tools/plain 2>/dev/null || echo "Not available")
+  my_ipv6=$(curl -s -m 2 https://myipv6.addr.tools/plain 2>/dev/null || echo "Not available")
+  echo "Your public IP:"
   echo "- IPv4: $my_ipv4"
   echo "- IPv6: $my_ipv6" 
   echo "" 
