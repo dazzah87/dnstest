@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
+# ==============================================================================
+# Hardened Environment
+# ==============================================================================
 set -euo pipefail
 export LC_ALL=C
+# Prevent PATH Hijacking
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 # ==============================================================================
 # Initialization & Dependency Checks
@@ -62,32 +67,38 @@ EOF
 }
 
 check_ipv6_support() {
-  if $dig_cmd +short +tries=1 +time=2 +stats @2a0d:2a00:1::1 www.google.com 2>/dev/null | grep -q "216.239.38.120"; then
+  # Strict timeout and parsing to avoid hanging
+  if $dig_cmd +short +tries=1 +time=2 +stats @2a0d:2a00:1::1 www.google.com 2>/dev/null | grep -q "^216\.239\."; then
     echo "true"
   fi
 }
 
-# Fetch user public IPs and ISP/ASN in background to speed up execution
+# Fetch user public IPs securely and sanitize external input
 fetch_user_ips() {
   local v4="Not available" v4_info="Not available"
   local v6="Not available" v6_info="Not available"
   
-  v4=$(curl -s -m 2 https://myipv4.addr.tools/plain 2>/dev/null || true)
-  if [[ -n "$v4" ]]; then
-    # sed removes the "AS12345 " prefix to only keep the clean ISP name
-    v4_info=$(curl -s -m 2 "ipinfo.io/${v4}/org" 2>/dev/null | sed -E 's/^AS[0-9]+[ ]*//' || true)
+  # Fetch IPv4 and strip all non-hex/dot characters immediately
+  local raw_v4
+  raw_v4=$(curl -s -m 2 https://myipv4.addr.tools/plain 2>/dev/null | tr -dc '0-9.' || true)
+  
+  # Validate exact IPv4 format before making secondary external calls
+  if [[ "$raw_v4" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
+    v4="$raw_v4"
+    # Ensure HTTPS, remove ASN, and STRICTLY strip terminal escape codes (only allow printable chars)
+    v4_info=$(curl -s -m 2 "https://ipinfo.io/${v4}/org" 2>/dev/null | sed -E 's/^AS[0-9]+[ ]*//' | tr -dc '[:print:]' || true)
     [[ -z "$v4_info" ]] && v4_info="Not available"
-  else
-    v4="Not available"
   fi
 
-  v6=$(curl -s -m 2 https://myipv6.addr.tools/plain 2>/dev/null || true)
-  if [[ -n "$v6" ]]; then
-    # sed removes the "AS12345 " prefix
-    v6_info=$(curl -s -m 2 "ipinfo.io/${v6}/org" 2>/dev/null | sed -E 's/^AS[0-9]+[ ]*//' || true)
+  # Fetch IPv6 and strip all non-hex/colon characters
+  local raw_v6
+  raw_v6=$(curl -s -m 2 https://myipv6.addr.tools/plain 2>/dev/null | tr -dc 'a-fA-F0-9:' || true)
+  
+  # Validate basic IPv6 format (contains colons and hex)
+  if [[ -n "$raw_v6" && "$raw_v6" == *":"* && "$raw_v6" =~ ^[a-fA-F0-9:]+$ ]]; then
+    v6="$raw_v6"
+    v6_info=$(curl -s -m 2 "https://ipinfo.io/${v6}/org" 2>/dev/null | sed -E 's/^AS[0-9]+[ ]*//' | tr -dc '[:print:]' || true)
     [[ -z "$v6_info" ]] && v6_info="Not available"
-  else
-    v6="Not available"
   fi
 
   echo "$v4|$v4_info|$v6|$v6_info" > "$TMP_DIR/user_ips.txt"
@@ -141,6 +152,8 @@ test_provider_worker() {
     local ttime
     ttime=$($dig_cmd +tries=1 +time=2 +stats @"$pip" "$d" 2>/dev/null | awk '/Query time:/ {print $4; exit}' || true)
     
+    # Ensure ttime is strictly numeric to prevent AWK injection
+    ttime=$(echo "$ttime" | tr -dc '0-9')
     [[ -z "$ttime" ]] && ttime=1000
     [[ "$ttime" == "0" ]] && ttime=1
     
@@ -188,7 +201,6 @@ print_table() {
   echo "- IPv6: $my_ipv6 ($my_ipv6_info)" 
   echo ""
 
-  # Find the longest IP for dynamic padding and determine the fastest provider
   local max_ip_len=2
   local min_avg=999999
   local best_provider=""
@@ -197,10 +209,8 @@ print_table() {
     [[ -z "$row" ]] && continue
     IFS='|' read -r -a parts <<< "$row"
     
-    # Calculate dynamic width
     [[ ${#parts[1]} -gt max_ip_len ]] && max_ip_len=${#parts[1]}
     
-    # Find the fastest average for highlighting
     local avg="${parts[totaldomains+2]}"
     local is_less
     is_less=$(awk -v a="$avg" -v b="$min_avg" 'BEGIN{print (a < b) ? 1 : 0}')
@@ -212,17 +222,14 @@ print_table() {
   
   local ip_pad=$((max_ip_len + 2))
 
-  # Print Header
   printf "\033[1m%-16s %-${ip_pad}s\e[0m" "Provider" "IP"
   for ((i=1; i<=totaldomains; i++)); do printf "\e[1m%-8s\e[0m" "Test$i"; done
   printf "\033[1m%-8s\e[0m\n" "Average"
 
-  # Print Rows
   while IFS= read -r row; do
     [[ -z "$row" ]] && continue
     IFS='|' read -r -a parts <<< "$row"
     
-    # Highlight the fastest provider in Cyan
     local c_start="" c_end=""
     if [[ "${parts[0]}" == "$best_provider" ]]; then
       c_start="\e[36m"
@@ -234,7 +241,6 @@ print_table() {
     printf "%-8s${c_end}\n" "${parts[totaldomains+2]}"
   done < <(echo "$rows" | sort_rows)
 
-  # Print DNSSEC Block
   local audit_files=("$TMP_DIR"/*_audit.txt)
   if [[ -e "${audit_files[0]}" ]]; then
     printf "\n\033[1m--- DNSSEC Audit Failures ---\033[0m\n"
