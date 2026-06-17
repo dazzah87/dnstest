@@ -249,11 +249,6 @@ case "$format" in
   json)  print_json ;;
 esac
 
-if [ "$format" = "table" ]; then
-  best_row=$(printf '%s\n' "$rows" | sort -t '|' -k"$((totaldomains + 2))","$((totaldomains + 2))"n | head -n 1)
-  IFS='|' read -r -a best_parts <<< "$best_row"
-  echo ""
-  echo "Best DNS provider for your network: ${best_parts[0]}"
   echo ""
 
   has_any_failures=0
