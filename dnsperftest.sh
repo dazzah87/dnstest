@@ -160,7 +160,7 @@ print_table() {
       [ -z "$ip" ] && continue
       ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || true)
       [ -n "$ptr" ] && ptr="${ptr%.}" || ptr="N/A"
-      printf -- "- %-45s (ptr: %s)\n" "$ip" "$ptr"
+      printf -- "- %-10s (%s)\n" "$ip" "$ptr"
     done <<< "$resolver_ips"
   else
     echo "- Not available"
