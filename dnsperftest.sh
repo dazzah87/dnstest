@@ -147,8 +147,9 @@ print_table() {
 
   echo "Your public IP:"
   echo "- IPv4: $my_ipv4"
-  echo "- IPv6: $my_ipv6" 
-  echo "Current DNS Resolver: $current_resolver"
+  echo "- IPv6: $my_ipv6"
+  echo "" 
+  echo "Your DNS resolver: $current_resolver"
   echo "" 
 
   printf "%-21s" "Provider"
