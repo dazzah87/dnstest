@@ -74,7 +74,8 @@ fetch_user_ips() {
   
   v4=$(curl -s -m 2 https://myipv4.addr.tools/plain 2>/dev/null || true)
   if [[ -n "$v4" ]]; then
-    v4_info=$(curl -s -m 2 "ipinfo.io/${v4}/org" 2>/dev/null || true)
+    # sed removes the "AS12345 " prefix to only keep the clean ISP name
+    v4_info=$(curl -s -m 2 "ipinfo.io/${v4}/org" 2>/dev/null | sed -E 's/^AS[0-9]+[ ]*//' || true)
     [[ -z "$v4_info" ]] && v4_info="Not available"
   else
     v4="Not available"
@@ -82,7 +83,8 @@ fetch_user_ips() {
 
   v6=$(curl -s -m 2 https://myipv6.addr.tools/plain 2>/dev/null || true)
   if [[ -n "$v6" ]]; then
-    v6_info=$(curl -s -m 2 "ipinfo.io/${v6}/org" 2>/dev/null || true)
+    # sed removes the "AS12345 " prefix
+    v6_info=$(curl -s -m 2 "ipinfo.io/${v6}/org" 2>/dev/null | sed -E 's/^AS[0-9]+[ ]*//' || true)
     [[ -z "$v6_info" ]] && v6_info="Not available"
   else
     v6="Not available"
@@ -186,31 +188,64 @@ print_table() {
   echo "- IPv6: $my_ipv6 (ISP: $my_ipv6_info)" 
   echo ""
 
-  printf "\033[1m%-16s %-24s\e[0m" "Provider" "IP"
-  for ((i=1; i<=totaldomains; i++)); do printf "\e[1m%-8s\e[0m" "Test$i"; done
-  printf "\033[1m%-8s\e[0m\n" "Average"
-
+  # Find the longest IP for dynamic padding and determine the fastest provider
+  local max_ip_len=2
+  local min_avg=999999
+  local best_provider=""
+  
   while IFS= read -r row; do
     [[ -z "$row" ]] && continue
     IFS='|' read -r -a parts <<< "$row"
     
-    printf "%-16s %-24s" "${parts[0]}" "${parts[1]}"
+    # Calculate dynamic width
+    [[ ${#parts[1]} -gt max_ip_len ]] && max_ip_len=${#parts[1]}
+    
+    # Find the fastest average for highlighting
+    local avg="${parts[totaldomains+2]}"
+    local is_less
+    is_less=$(awk -v a="$avg" -v b="$min_avg" 'BEGIN{print (a < b) ? 1 : 0}')
+    if [[ "$is_less" -eq 1 ]]; then
+      min_avg="$avg"
+      best_provider="${parts[0]}"
+    fi
+  done <<< "$rows"
+  
+  local ip_pad=$((max_ip_len + 2))
+
+  # Print Header
+  printf "\033[1m%-16s %-${ip_pad}s\e[0m" "Provider" "IP"
+  for ((i=1; i<=totaldomains; i++)); do printf "\e[1m%-8s\e[0m" "Test$i"; done
+  printf "\033[1m%-8s\e[0m\n" "Average"
+
+  # Print Rows
+  while IFS= read -r row; do
+    [[ -z "$row" ]] && continue
+    IFS='|' read -r -a parts <<< "$row"
+    
+    # Highlight the fastest provider in Cyan
+    local c_start="" c_end=""
+    if [[ "${parts[0]}" == "$best_provider" ]]; then
+      c_start="\e[36m"
+      c_end="\e[0m"
+    fi
+    
+    printf "${c_start}%-16s %-${ip_pad}s" "${parts[0]}" "${parts[1]}"
     for ((i=1; i<=totaldomains; i++)); do printf "%-8s" "${parts[i+1]}ms"; done
-    printf "%-8s\n" "${parts[totaldomains+2]}"
+    printf "%-8s${c_end}\n" "${parts[totaldomains+2]}"
   done < <(echo "$rows" | sort_rows)
 
+  # Print DNSSEC Block
   local audit_files=("$TMP_DIR"/*_audit.txt)
   if [[ -e "${audit_files[0]}" ]]; then
     printf "\n\033[1m--- DNSSEC Audit Failures ---\033[0m\n"
     cat "$TMP_DIR"/*_audit.txt
   else
     printf "\nGreat! All DNS responses were successfully authenticated using DNSSEC.\n\n"
-    printf "                    ECDSA      ECDSA\n"
-    printf "                    P-256      P-384      Ed25519\n"
-    printf "Valid signature     \e[32mPASS\e[0m       \e[32mPASS\e[0m       \e[32mPASS\e[0m\n"
-    printf "Invalid signature   \e[32mPASS\e[0m       \e[32mPASS\e[0m       \e[32mPASS\e[0m\n"
-    printf "Expired signature   \e[32mPASS\e[0m       \e[32mPASS\e[0m       \e[32mPASS\e[0m\n"
-    printf "Missing signature   \e[32mPASS\e[0m       \e[32mPASS\e[0m       \e[32mPASS\e[0m\n"
+    printf "%-20s %-15s %-15s %-15s\n" "" "ECDSA P-256" "ECDSA P-384" "Ed25519"
+    printf "%-20s \e[32mPASS\e[0m           \e[32mPASS\e[0m           \e[32mPASS\e[0m\n" "Valid signature"
+    printf "%-20s \e[32mPASS\e[0m           \e[32mPASS\e[0m           \e[32mPASS\e[0m\n" "Invalid signature"
+    printf "%-20s \e[32mPASS\e[0m           \e[32mPASS\e[0m           \e[32mPASS\e[0m\n" "Expired signature"
+    printf "%-20s \e[32mPASS\e[0m           \e[32mPASS\e[0m           \e[32mPASS\e[0m\n" "Missing signature"
     printf "\n"
   fi
 }
