@@ -148,19 +148,22 @@ print_table() {
   echo "- IPv6: $my_ipv6" 
   echo ""
 
-  echo "System/Browser DNS (Native/DoH):"
-  # Nutzt curl (was macOS DoH Profile respektiert), um den Status bei NextDNS abzufragen
+  echo "Terminal DNS Status (NextDNS vs System):"
   nextdns_check=$(curl -s -m 2 https://test.nextdns.io 2>/dev/null || true)
   if [[ "$nextdns_check" == *"\"status\": \"ok\""* ]]; then
     nextdns_ip=$(echo "$nextdns_check" | grep -o '"destIP": *"[^"]*"' | cut -d'"' -f4 || echo "N/A")
-    echo "- $nextdns_ip (nextdns.io)"
+    echo "- Active: NextDNS is resolving terminal requests ($nextdns_ip)"
+  elif [[ "$nextdns_check" == *"\"status\": \"unconfigured\""* ]]; then
+    nextdns_resolver=$(echo "$nextdns_check" | grep -o '"resolver": *"[^"]*"' | cut -d'"' -f4 || echo "Unknown")
+    echo "- NextDNS is NOT active in the terminal layer."
+    echo "- Terminal requests are being routed to: $nextdns_resolver"
+    echo "  (Note: If your browser shows NextDNS, it is configured in the browser layer only.)"
   else
-    echo "- No native DoH / NextDNS detected"
+    echo "- Could not reach NextDNS test server."
   fi
   echo ""
 
-  echo "Terminal DNS (Raw Network Settings):"
-  # Nutzt dig (was macOS DoH umgeht und roh das WLAN/LAN abfragt)
+  echo "Terminal DNS (Raw Network Settings via dig):"
   resolver_ips=$({
     $dig_cmd +short whoami.akamai.net A 2>/dev/null || true
     $dig_cmd +short o-o.myaddr.l.google.com TXT 2>/dev/null | tr -d '"' || true
@@ -172,9 +175,9 @@ print_table() {
       [ -n "$ptr" ] && ptr="${ptr%.}" || ptr="N/A"
       
       if [[ "$ip" == *":"* ]]; then
-        echo "- IPv6: $ip (PTR: $ptr)"
+        echo "- IPv6: $ip ($ptr)"
       else
-        echo "- IPv4: $ip (PTR: $ptr)"
+        echo "- IPv4: $ip ($ptr)"
       fi
     done
   else
