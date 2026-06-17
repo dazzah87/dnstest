@@ -117,7 +117,7 @@ run_dnssec_audit_silent() {
     "Expired signature:expiredsig.test:NO"
     "Missing signature:nosig.test:NO"
   )
-  local algos=("alg8:RSA/SHA256" "alg13:ECDSA P-256" "alg14:ECDSA P-384" "alg15:Ed25519")
+  local algos=("alg13:ECDSA P-256" "alg14:ECDSA P-384" "alg15:Ed25519")
 
   for t in "${tests[@]}"; do
     IFS=':' read -r test_name prefix expect <<< "$t"
@@ -165,7 +165,7 @@ test_provider_worker() {
   avg=$(awk -v ftime="$ftime" -v total="$totaldomains" 'BEGIN {printf "%.2f", ftime/total}')
   row="${row}|${avg}"
 
-  # 3. Privacy Check (EDNS Client Subnet)
+  # 3. ECS Check (EDNS Client Subnet)
   local ecs_check
   ecs_check=$($dig_cmd +short +tries=1 +time=2 @"$pip" o-o.myaddr.l.google.com TXT 2>/dev/null || true)
   local ecs="Strict"
@@ -236,12 +236,10 @@ print_table() {
   local prov_pad=$((max_prov_len + 2))
   local ip_pad=$((max_ip_len + 2))
 
-  # Print Header dynamically
   printf "\033[1m%-${prov_pad}s %-${ip_pad}s\e[0m" "Provider" "IP"
   for ((i=1; i<=totaldomains; i++)); do printf "\e[1m%-8s\e[0m" "Test$i"; done
   printf "\033[1m%-8s %-8s\e[0m\n" "Average" "Privacy"
 
-  # Print Rows
   while IFS= read -r row; do
     [[ -z "$row" ]] && continue
     IFS='|' read -r -a parts <<< "$row"
@@ -268,8 +266,8 @@ print_table() {
     printf "\n\033[1m--- DNSSEC Audit Failures ---\033[0m\n"
     cat "$TMP_DIR"/*_audit.txt
   else
-    printf "\nGreat! All DNS responses were successfully authenticated using DNSSEC.\n\n"
-    printf "%-20s%-16s%-16s%s\n" "" "RSA/SHA256" "ECDSA P-256" "ECDSA P-384" "Ed25519"
+    printf "\nGreat! All DNS responses were successfully authenticated using DNSSEC:\n\n"
+    printf "%-20s%-16s%-16s%s\n" "" "ECDSA P-256" "ECDSA P-384" "Ed25519"
     printf "%-20s\e[32mPASS\e[0m            \e[32mPASS\e[0m            \e[32mPASS\e[0m\n" "Valid signature"
     printf "%-20s\e[32mPASS\e[0m            \e[32mPASS\e[0m            \e[32mPASS\e[0m\n" "Invalid signature"
     printf "%-20s\e[32mPASS\e[0m            \e[32mPASS\e[0m            \e[32mPASS\e[0m\n" "Expired signature"
@@ -277,8 +275,8 @@ print_table() {
   fi
 
   printf "\n\033[1m--- Info ---\033[0m\n"
-  printf "'Strict' = No ECS (EDNS Client Subnet).\n\n"
-  printf "'Sent' = Your IP subnet is shared (better routing, less privacy).\n\n"
+  printf "'Strict' = No ECS (EDNS Client Subnet) information is sent.\n"
+  printf "'Sent' = Part of your client subnet is shared via ECS.\n\n"
 }
 
 print_csv() {
