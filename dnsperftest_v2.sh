@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Hardened Environment
+# Hardened Environment & Cleanup
 # ==============================================================================
 set -euo pipefail
 export LC_ALL=C
-# Prevent PATH Hijacking
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
+# Secure Temp Directory & Robust Cleanup
+TMP_DIR=$(mktemp -d)
+cleanup() {
+  rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT INT TERM
+
 # ==============================================================================
-# Initialization & Dependency Checks
+# Dependency Checks
 # ==============================================================================
 
 if command -v drill >/dev/null 2>&1; then
@@ -16,12 +22,14 @@ if command -v drill >/dev/null 2>&1; then
 elif command -v dig >/dev/null 2>&1; then
   dig_cmd="dig"
 else
-  echo "error: dig/drill was not found. Please install dnsutils or ldns." >&2
+  echo "error: dig/drill was not found. Please install dnsutils (bind-tools) or ldns." >&2
   exit 1
 fi
 
-TMP_DIR=$(mktemp -d)
-trap 'rm -rf "$TMP_DIR"' EXIT
+if ! command -v curl >/dev/null 2>&1; then
+  echo "error: curl is required but not found. Please install curl." >&2
+  exit 1
+fi
 
 # ==============================================================================
 # Configuration
@@ -67,34 +75,27 @@ EOF
 }
 
 check_ipv6_support() {
-  # Strict timeout and parsing to avoid hanging
   if $dig_cmd +short +tries=1 +time=2 +stats @2a0d:2a00:1::1 www.google.com 2>/dev/null | grep -q "^216\.239\."; then
     echo "true"
   fi
 }
 
-# Fetch user public IPs securely and sanitize external input
 fetch_user_ips() {
   local v4="Not available" v4_info="Not available"
   local v6="Not available" v6_info="Not available"
   
-  # Fetch IPv4 and strip all non-hex/dot characters immediately
   local raw_v4
   raw_v4=$(curl -s -m 2 https://myipv4.addr.tools/plain 2>/dev/null | tr -dc '0-9.' || true)
   
-  # Validate exact IPv4 format before making secondary external calls
   if [[ "$raw_v4" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
     v4="$raw_v4"
-    # Ensure HTTPS, remove ASN, and STRICTLY strip terminal escape codes (only allow printable chars)
     v4_info=$(curl -s -m 2 "https://ipinfo.io/${v4}/org" 2>/dev/null | sed -E 's/^AS[0-9]+[ ]*//' | tr -dc '[:print:]' || true)
     [[ -z "$v4_info" ]] && v4_info="Not available"
   fi
 
-  # Fetch IPv6 and strip all non-hex/colon characters
   local raw_v6
   raw_v6=$(curl -s -m 2 https://myipv6.addr.tools/plain 2>/dev/null | tr -dc 'a-fA-F0-9:' || true)
   
-  # Validate basic IPv6 format (contains colons and hex)
   if [[ -n "$raw_v6" && "$raw_v6" == *":"* && "$raw_v6" =~ ^[a-fA-F0-9:]+$ ]]; then
     v6="$raw_v6"
     v6_info=$(curl -s -m 2 "https://ipinfo.io/${v6}/org" 2>/dev/null | sed -E 's/^AS[0-9]+[ ]*//' | tr -dc '[:print:]' || true)
@@ -152,7 +153,6 @@ test_provider_worker() {
     local ttime
     ttime=$($dig_cmd +tries=1 +time=2 +stats @"$pip" "$d" 2>/dev/null | awk '/Query time:/ {print $4; exit}' || true)
     
-    # Ensure ttime is strictly numeric to prevent AWK injection
     ttime=$(echo "$ttime" | tr -dc '0-9')
     [[ -z "$ttime" ]] && ttime=1000
     [[ "$ttime" == "0" ]] && ttime=1
@@ -201,7 +201,9 @@ print_table() {
   echo "- IPv6: $my_ipv6 ($my_ipv6_info)" 
   echo ""
 
-  local max_ip_len=2
+  # Calculate dynamic widths for BOTH Provider and IP columns
+  local max_prov_len=8 # minimum length for "Provider" header
+  local max_ip_len=2   # minimum length for "IP" header
   local min_avg=999999
   local best_provider=""
   
@@ -209,6 +211,7 @@ print_table() {
     [[ -z "$row" ]] && continue
     IFS='|' read -r -a parts <<< "$row"
     
+    [[ ${#parts[0]} -gt max_prov_len ]] && max_prov_len=${#parts[0]}
     [[ ${#parts[1]} -gt max_ip_len ]] && max_ip_len=${#parts[1]}
     
     local avg="${parts[totaldomains+2]}"
@@ -220,12 +223,16 @@ print_table() {
     fi
   done <<< "$rows"
   
+  # Add padding (+2 spaces)
+  local prov_pad=$((max_prov_len + 2))
   local ip_pad=$((max_ip_len + 2))
 
-  printf "\033[1m%-16s %-${ip_pad}s\e[0m" "Provider" "IP"
+  # Print Header dynamically
+  printf "\033[1m%-${prov_pad}s %-${ip_pad}s\e[0m" "Provider" "IP"
   for ((i=1; i<=totaldomains; i++)); do printf "\e[1m%-8s\e[0m" "Test$i"; done
   printf "\033[1m%-8s\e[0m\n" "Average"
 
+  # Print Rows
   while IFS= read -r row; do
     [[ -z "$row" ]] && continue
     IFS='|' read -r -a parts <<< "$row"
@@ -236,13 +243,15 @@ print_table() {
       c_end="\e[0m"
     fi
     
-    printf "${c_start}%-16s %-${ip_pad}s" "${parts[0]}" "${parts[1]}"
+    printf "${c_start}%-${prov_pad}s %-${ip_pad}s" "${parts[0]}" "${parts[1]}"
     for ((i=1; i<=totaldomains; i++)); do printf "%-8s" "${parts[i+1]}ms"; done
     printf "%-8s${c_end}\n" "${parts[totaldomains+2]}"
   done < <(echo "$rows" | sort_rows)
 
+  # Print DNSSEC Block
   local audit_files=("$TMP_DIR"/*_audit.txt)
-  if [[ -e "${audit_files[0]}" ]]; then
+  # Check if at least one audit file exists and has size > 0
+  if ls "$TMP_DIR"/*_audit.txt 1> /dev/null 2>&1; then
     printf "\n\033[1m--- DNSSEC Audit Failures ---\033[0m\n"
     cat "$TMP_DIR"/*_audit.txt
   else
@@ -348,6 +357,7 @@ done
 
 wait
 
+# Safely gather results
 rows=$(cat "$TMP_DIR"/*.res 2>/dev/null || true)
 
 case "$format" in
