@@ -149,6 +149,7 @@ test_provider_worker() {
   
   local row="${pname}|${pip}"
 
+  # 1. Performance Tests
   for d in "${DOMAINS2TEST[@]}"; do
     local ttime
     ttime=$($dig_cmd +tries=1 +time=2 +stats @"$pip" "$d" 2>/dev/null | awk '/Query time:/ {print $4; exit}' || true)
@@ -161,10 +162,21 @@ test_provider_worker() {
     ((ftime += ttime))
   done
 
+  # 2. Calculate Average
   local avg
   avg=$(awk -v ftime="$ftime" -v total="$totaldomains" 'BEGIN {printf "%.2f", ftime/total}')
   row="${row}|${avg}"
 
+  # 3. ECS (EDNS Client Subnet) Privacy Check
+  local ecs_check
+  ecs_check=$($dig_cmd +short +tries=1 +time=2 @"$pip" o-o.myaddr.l.google.com TXT 2>/dev/null || true)
+  local ecs="Strict"
+  if echo "$ecs_check" | grep -qi "edns0-client-subnet"; then
+    ecs="Sent"
+  fi
+  row="${row}|${ecs}"
+
+  # 4. DNSSEC Audit
   local audit_fails
   audit_fails=$(run_dnssec_audit_silent "$pip")
   if [[ -n "$audit_fails" ]]; then
@@ -179,6 +191,7 @@ test_provider_worker() {
 # ==============================================================================
 
 sort_rows() {
+  # Sort by Average which is at index (totaldomains + 3) in the 1-based awk/sort logic
   local col_idx=$((totaldomains + 3))
   if [[ "$sort_mode" == "fastest" ]]; then
     sort -t '|' -k"${col_idx},${col_idx}n"
@@ -201,9 +214,9 @@ print_table() {
   echo "- IPv6: $my_ipv6 ($my_ipv6_info)" 
   echo ""
 
-  # Calculate dynamic widths for BOTH Provider and IP columns
-  local max_prov_len=8 # minimum length for "Provider" header
-  local max_ip_len=2   # minimum length for "IP" header
+  # Calculate dynamic widths
+  local max_prov_len=8
+  local max_ip_len=2
   local min_avg=999999
   local best_provider=""
   
@@ -223,34 +236,38 @@ print_table() {
     fi
   done <<< "$rows"
   
-  # Add padding (+2 spaces)
   local prov_pad=$((max_prov_len + 2))
   local ip_pad=$((max_ip_len + 2))
 
   # Print Header dynamically
   printf "\033[1m%-${prov_pad}s %-${ip_pad}s\e[0m" "Provider" "IP"
   for ((i=1; i<=totaldomains; i++)); do printf "\e[1m%-8s\e[0m" "Test$i"; done
-  printf "\033[1m%-8s\e[0m\n" "Average"
+  printf "\033[1m%-8s %-8s\e[0m\n" "Average" "ECS"
 
   # Print Rows
   while IFS= read -r row; do
     [[ -z "$row" ]] && continue
     IFS='|' read -r -a parts <<< "$row"
     
-    local c_start="" c_end=""
+    local c_start="" c_end="\e[0m"
     if [[ "${parts[0]}" == "$best_provider" ]]; then
       c_start="\e[36m"
-      c_end="\e[0m"
+    fi
+    
+    local ecs_val="${parts[totaldomains+3]}"
+    local c_ecs=""
+    if [[ "$ecs_val" == "Strict" ]]; then
+      c_ecs="\e[32m" # Green
+    else
+      c_ecs="\e[33m" # Yellow
     fi
     
     printf "${c_start}%-${prov_pad}s %-${ip_pad}s" "${parts[0]}" "${parts[1]}"
     for ((i=1; i<=totaldomains; i++)); do printf "%-8s" "${parts[i+1]}ms"; done
-    printf "%-8s${c_end}\n" "${parts[totaldomains+2]}"
+    printf "%-8s ${c_ecs}%-8s${c_end}\n" "${parts[totaldomains+2]}" "$ecs_val"
   done < <(echo "$rows" | sort_rows)
 
   # Print DNSSEC Block
-  local audit_files=("$TMP_DIR"/*_audit.txt)
-  # Check if at least one audit file exists and has size > 0
   if ls "$TMP_DIR"/*_audit.txt 1> /dev/null 2>&1; then
     printf "\n\033[1m--- DNSSEC Audit Failures ---\033[0m\n"
     cat "$TMP_DIR"/*_audit.txt
@@ -268,7 +285,7 @@ print_table() {
 print_csv() {
   printf "provider,ip"
   for ((i=1; i<=totaldomains; i++)); do printf ",test%d" "$i"; done
-  printf ",average\n"
+  printf ",average,ecs\n"
   while IFS= read -r row; do 
     [[ -n "$row" ]] && echo "${row//|/,}"
   done < <(echo "$rows" | sort_rows)
@@ -277,7 +294,7 @@ print_csv() {
 print_tsv() {
   printf "provider\tip"
   for ((i=1; i<=totaldomains; i++)); do printf "\ttest%d" "$i"; done
-  printf "\taverage\n"
+  printf "\taverage\tecs\n"
   while IFS= read -r row; do 
     [[ -n "$row" ]] && printf '%s\n' "$row" | tr '|' '\t'
   done < <(echo "$rows" | sort_rows)
@@ -298,7 +315,7 @@ print_json() {
       [[ "$i" -eq 1 ]] || printf ','
       printf '%s' "${parts[i+1]}"
     done
-    printf '],"average":%s}' "${parts[totaldomains+2]}"
+    printf '],"average":%s,"ecs":"%s"}' "${parts[totaldomains+2]}" "${parts[totaldomains+3]}"
   done < <(echo "$rows" | sort_rows)
   printf '\n]\n'
 }
