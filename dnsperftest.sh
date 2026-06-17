@@ -149,26 +149,26 @@ print_table() {
   echo ""
   echo "Your DNS resolvers:"
 
+  # Sammle alle IPs von den Test-Diensten
+  # Wir erlauben explizit IPv4 und IPv6 Muster
   resolver_ips=$({
     $dig_cmd +short whoami.akamai.net A 2>/dev/null || true
+    $dig_cmd +short whoami.akamai.net AAAA 2>/dev/null || true
     $dig_cmd +short o-o.myaddr.l.google.com TXT 2>/dev/null | tr -d '"' || true
-  } | grep -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$|^[0-9a-fA-F:]+:[0-9a-fA-F:]+$' | sort -u)
+  } | grep -E '([0-9]{1,3}\.){3}[0-9]{1,3}|[0-9a-fA-F:]+:[0-9a-fA-F:]+' | sort -u)
 
   if [ -n "$resolver_ips" ]; then
+    # Hier zeigen wir die Daten an
     for ip in $resolver_ips; do
       ptr=$($dig_cmd +short -x "$ip" 2>/dev/null | tail -n 1 || true)
       [ -n "$ptr" ] && ptr="${ptr%.}" || ptr="N/A"
       
-      if [[ "$ip" == *":"* ]]; then
-        echo "- IPv6: $ip ($ptr)"
-      else
-        echo "- IPv4: $ip ($ptr)"
-      fi
+      # Ausgabe im Stil deines Screenshots
+      printf "  %-40s ptr: %s\n" "$ip" "$ptr"
     done
   else
-    echo "- Not available"
+    echo "  - Not available"
   fi
-  echo "" 
 
   printf "%-21s" "Provider"
   for ((i=1; i<=totaldomains; i++)); do printf "%-10s" "Test$i"; done
@@ -177,15 +177,9 @@ print_table() {
   while IFS= read -r row; do
     [ -z "$row" ] && continue
     IFS='|' read -r -a parts <<< "$row"
-
     printf "%-21s" "${parts[0]}"
-    
-    for ((i=1; i<=totaldomains; i++)); do
-      printf "%-10s" "${parts[i]}ms"
-    done
-    
+    for ((i=1; i<=totaldomains; i++)); do printf "%-10s" "${parts[i]}ms"; done
     printf "%-10s " "${parts[totaldomains+1]}"
-    
     dnssec_val="${parts[totaldomains+2]}"
     if [[ "$dnssec_val" == *"Yes"* ]]; then
         printf "\e[32m%s\e[0m\n" "$dnssec_val"
