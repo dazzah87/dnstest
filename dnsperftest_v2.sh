@@ -165,7 +165,7 @@ test_provider_worker() {
   avg=$(awk -v ftime="$ftime" -v total="$totaldomains" 'BEGIN {printf "%.2f", ftime/total}')
   row="${row}|${avg}"
 
-  # 3. ECS (EDNS Client Subnet) Privacy Check
+  # 3. Privacy Check (EDNS Client Subnet)
   local ecs_check
   ecs_check=$($dig_cmd +short +tries=1 +time=2 @"$pip" o-o.myaddr.l.google.com TXT 2>/dev/null || true)
   local ecs="Strict"
@@ -211,6 +211,7 @@ print_table() {
   echo "- IPv6: $my_ipv6 ($my_ipv6_info)" 
   echo ""
 
+  # Calculate dynamic widths
   local max_prov_len=8
   local max_ip_len=2
   local min_avg=999999
@@ -235,10 +236,12 @@ print_table() {
   local prov_pad=$((max_prov_len + 2))
   local ip_pad=$((max_ip_len + 2))
 
+  # Print Header dynamically
   printf "\033[1m%-${prov_pad}s %-${ip_pad}s\e[0m" "Provider" "IP"
   for ((i=1; i<=totaldomains; i++)); do printf "\e[1m%-8s\e[0m" "Test$i"; done
-  printf "\033[1m%-8s %-8s\e[0m\n" "Average" "ECS"
+  printf "\033[1m%-8s %-8s\e[0m\n" "Average" "Privacy"
 
+  # Print Rows
   while IFS= read -r row; do
     [[ -z "$row" ]] && continue
     IFS='|' read -r -a parts <<< "$row"
@@ -261,24 +264,29 @@ print_table() {
     printf "%-8s ${c_ecs}%-8s${c_end}\n" "${parts[totaldomains+2]}" "$ecs_val"
   done < <(echo "$rows" | sort_rows)
 
+  # Print DNSSEC Block
   if ls "$TMP_DIR"/*_audit.txt 1> /dev/null 2>&1; then
     printf "\n\033[1m--- DNSSEC Audit Failures ---\033[0m\n"
     cat "$TMP_DIR"/*_audit.txt
   else
-    printf "\nGreat! All DNS responses were successfully authenticated using DNSSEC:\n\n"
+    printf "\nGreat! All DNS responses were successfully authenticated using DNSSEC.\n\n"
     printf "%-20s%-16s%-16s%s\n" "" "ECDSA P-256" "ECDSA P-384" "Ed25519"
     printf "%-20s\e[32mPASS\e[0m            \e[32mPASS\e[0m            \e[32mPASS\e[0m\n" "Valid signature"
     printf "%-20s\e[32mPASS\e[0m            \e[32mPASS\e[0m            \e[32mPASS\e[0m\n" "Invalid signature"
     printf "%-20s\e[32mPASS\e[0m            \e[32mPASS\e[0m            \e[32mPASS\e[0m\n" "Expired signature"
     printf "%-20s\e[32mPASS\e[0m            \e[32mPASS\e[0m            \e[32mPASS\e[0m\n" "Missing signature"
-    printf "\n"
   fi
+
+  # Print Terminology Legend
+  printf "\n\033[1m--- Info ---\033[0m\n"
+  printf "Privacy: 'Strict' means your IP is hidden from destination servers.\n"
+  printf "         'Sent' means your IP subnet is shared (better routing, less privacy).\n\n"
 }
 
 print_csv() {
   printf "provider,ip"
   for ((i=1; i<=totaldomains; i++)); do printf ",test%d" "$i"; done
-  printf ",average,ecs\n"
+  printf ",average,privacy\n"
   while IFS= read -r row; do 
     [[ -n "$row" ]] && echo "${row//|/,}"
   done < <(echo "$rows" | sort_rows)
@@ -287,7 +295,7 @@ print_csv() {
 print_tsv() {
   printf "provider\tip"
   for ((i=1; i<=totaldomains; i++)); do printf "\ttest%d" "$i"; done
-  printf "\taverage\tecs\n"
+  printf "\taverage\tprivacy\n"
   while IFS= read -r row; do 
     [[ -n "$row" ]] && printf '%s\n' "$row" | tr '|' '\t'
   done < <(echo "$rows" | sort_rows)
@@ -308,7 +316,7 @@ print_json() {
       [[ "$i" -eq 1 ]] || printf ','
       printf '%s' "${parts[i+1]}"
     done
-    printf '],"average":%s,"ecs":"%s"}' "${parts[totaldomains+2]}" "${parts[totaldomains+3]}"
+    printf '],"average":%s,"privacy":"%s"}' "${parts[totaldomains+2]}" "${parts[totaldomains+3]}"
   done < <(echo "$rows" | sort_rows)
   printf '\n]\n'
 }
@@ -353,6 +361,7 @@ case "$mode" in
     ;;
 esac
 
+# Start IP check in background immediately to save execution time
 fetch_user_ips &
 
 for p in $providerstotest; do
@@ -366,6 +375,7 @@ done
 
 wait
 
+# Safely gather results
 rows=$(cat "$TMP_DIR"/*.res 2>/dev/null || true)
 
 case "$format" in
