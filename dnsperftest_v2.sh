@@ -184,8 +184,8 @@ print_table() {
 
   echo ""
   echo "Your public IP:"
-  echo "- IPv4: $my_ipv4 (ISP: $my_ipv4_info)"
-  echo "- IPv6: $my_ipv6 (ISP: $my_ipv6_info)" 
+  echo "- IPv4: $my_ipv4 ($my_ipv4_info)"
+  echo "- IPv6: $my_ipv6 ($my_ipv6_info)" 
   echo ""
 
   # Find the longest IP for dynamic padding and determine the fastest provider
@@ -241,11 +241,11 @@ print_table() {
     cat "$TMP_DIR"/*_audit.txt
   else
     printf "\nGreat! All DNS responses were successfully authenticated using DNSSEC.\n\n"
-    printf "%-20s %-15s %-15s %-15s\n" "" "ECDSA P-256" "ECDSA P-384" "Ed25519"
-    printf "%-20s \e[32mPASS\e[0m           \e[32mPASS\e[0m           \e[32mPASS\e[0m\n" "Valid signature"
-    printf "%-20s \e[32mPASS\e[0m           \e[32mPASS\e[0m           \e[32mPASS\e[0m\n" "Invalid signature"
-    printf "%-20s \e[32mPASS\e[0m           \e[32mPASS\e[0m           \e[32mPASS\e[0m\n" "Expired signature"
-    printf "%-20s \e[32mPASS\e[0m           \e[32mPASS\e[0m           \e[32mPASS\e[0m\n" "Missing signature"
+    printf "%-20s%-16s%-16s%s\n" "" "ECDSA P-256" "ECDSA P-384" "Ed25519"
+    printf "%-20s\e[32mPASS\e[0m            \e[32mPASS\e[0m            \e[32mPASS\e[0m\n" "Valid signature"
+    printf "%-20s\e[32mPASS\e[0m            \e[32mPASS\e[0m            \e[32mPASS\e[0m\n" "Invalid signature"
+    printf "%-20s\e[32mPASS\e[0m            \e[32mPASS\e[0m            \e[32mPASS\e[0m\n" "Expired signature"
+    printf "%-20s\e[32mPASS\e[0m            \e[32mPASS\e[0m            \e[32mPASS\e[0m\n" "Missing signature"
     printf "\n"
   fi
 }
