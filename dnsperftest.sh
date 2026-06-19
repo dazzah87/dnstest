@@ -1,21 +1,17 @@
 #!/usr/bin/env bash
-# ==============================================================================
+
 # Hardened Environment & Cleanup
-# ==============================================================================
 set -euo pipefail
 export LC_ALL=C
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-# Secure Temp Directory & Robust Cleanup
 TMP_DIR=$(mktemp -d)
 cleanup() {
   rm -rf "$TMP_DIR"
 }
 trap cleanup EXIT INT TERM
 
-# ==============================================================================
 # Dependency Checks
-# ==============================================================================
 
 if command -v drill >/dev/null 2>&1; then
   dig_cmd="drill"
@@ -31,10 +27,6 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
-# ==============================================================================
-# Configuration
-# ==============================================================================
-
 PROVIDERSV4="
 8.8.8.8#Google
 188.34.161.210#HaGeZi-Root
@@ -49,12 +41,8 @@ PROVIDERSV6="
 2a13:1001::86:54:11:11#DNS4EU-v6
 "
 
-DOMAINS2TEST=(google.com youtube.com facebook.com github.com instagram.com whatsapp.com reddit.com wikipedia.org amazon.com tiktok.com)
+DOMAINS2TEST=(google.com youtube.com facebook.com github.com instagram.com whatsapp.com reddit.com wikipedia.org amazon.de tiktok.com apple.com paypal.com)
 totaldomains=${#DOMAINS2TEST[@]}
-
-# ==============================================================================
-# Helper Functions
-# ==============================================================================
 
 usage() {
   cat <<'EOF'
@@ -102,10 +90,6 @@ fetch_user_ips() {
 
   echo "$v4|$v4_info|$v6|$v6_info" > "$TMP_DIR/user_ips.txt"
 }
-
-# ==============================================================================
-# Core Testing Logic
-# ==============================================================================
 
 run_dnssec_audit_silent() {
   local pip=$1
@@ -184,9 +168,7 @@ test_provider_worker() {
   echo "$row" > "$TMP_DIR/${pip}.res"
 }
 
-# ==============================================================================
 # Output Formatting
-# ==============================================================================
 
 sort_rows() {
   local col_idx=$((totaldomains + 3))
@@ -211,7 +193,6 @@ print_table() {
   echo "- IPv6: $my_ipv6 ($my_ipv6_info)" 
   echo ""
 
-  # Calculate dynamic widths
   local max_prov_len=8
   local max_ip_len=2
   local min_avg=999999
@@ -317,9 +298,7 @@ print_json() {
   printf '\n]\n'
 }
 
-# ==============================================================================
 # Main Execution
-# ==============================================================================
 
 mode="ipv4"
 format="table"
