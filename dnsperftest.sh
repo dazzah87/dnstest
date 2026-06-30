@@ -33,7 +33,6 @@ PROVIDERSV4="
 86.54.11.11#DNS4EU
 159.69.155.94#HaGeZi-Wurzn
 188.34.161.210#HaGeZi-Root
-217.237.150.205#Telekom
 "
 
 PROVIDERSV6="
@@ -43,7 +42,6 @@ PROVIDERSV6="
 2a13:1001::86:54:11:11#DNS4EU-v6
 2a01:4f8:1c1c:d363::1#HaGeZi-Wurzn-v6
 2a01:4f8:c17:1c66::1#HaGeZi-Root-v6
-2003:180:2:a000::53#Telekom-v6
 "
 
 DOMAINS2TEST=(amazon.de apple.com cloudflare.com denic.de facebook.com google.com microsoft.com paypal.com tiktok.com wikipedia.org)
