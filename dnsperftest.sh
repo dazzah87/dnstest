@@ -10,8 +10,6 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# Dependency Checks
-
 if command -v drill >/dev/null 2>&1; then
   dig_cmd="drill"
 elif command -v dig >/dev/null 2>&1; then
@@ -134,7 +132,6 @@ test_provider_worker() {
   
   local row="${pname}|${pip}"
 
-  # 1. Performance Tests
   for d in "${DOMAINS2TEST[@]}"; do
     local ttime
     ttime=$($dig_cmd +tries=1 +time=2 +stats @"$pip" "$d" 2>/dev/null | awk '/Query time:/ {print $4; exit}' || true)
@@ -147,12 +144,10 @@ test_provider_worker() {
     ((ftime += ttime))
   done
 
-  # 2. Calculate Average
   local avg
   avg=$(awk -v ftime="$ftime" -v total="$totaldomains" 'BEGIN {printf "%.2f", ftime/total}')
   row="${row}|${avg}"
 
-  # 3. ECS Check (EDNS Client Subnet)
   local ecs_check
   ecs_check=$($dig_cmd +short +tries=1 +time=2 @"$pip" o-o.myaddr.l.google.com TXT 2>/dev/null || true)
   local ecs="Strict"
@@ -161,7 +156,6 @@ test_provider_worker() {
   fi
   row="${row}|${ecs}"
 
-  # 4. DNSSEC Audit
   local audit_fails
   audit_fails=$(run_dnssec_audit_silent "$pip")
   if [[ -n "$audit_fails" ]]; then
@@ -170,8 +164,6 @@ test_provider_worker() {
 
   echo "$row" > "$TMP_DIR/${pip}.res"
 }
-
-# Output Formatting
 
 sort_rows() {
   local col_idx=$((totaldomains + 3))
@@ -300,8 +292,6 @@ print_json() {
   done < <(echo "$rows" | sort_rows)
   printf '\n]\n'
 }
-
-# Main Execution
 
 mode="ipv4"
 format="table"
