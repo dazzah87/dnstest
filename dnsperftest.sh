@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-# Hardened Environment & Cleanup
 set -euo pipefail
 export LC_ALL=C
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -28,20 +27,26 @@ if ! command -v curl >/dev/null 2>&1; then
 fi
 
 PROVIDERSV4="
+1.1.1.1#Cloudflare
 8.8.8.8#Google
-188.34.161.210#HaGeZi-Root
-159.69.155.94#HaGeZi-Wurzn
+9.9.9.9#Quad9
 86.54.11.11#DNS4EU
+159.69.155.94#HaGeZi-Wurzn
+188.34.161.210#HaGeZi-Root
+217.237.150.205#Telekom
 "
 
 PROVIDERSV6="
+2606:4700:4700::1111#Cloudflare-v6
 2001:4860:4860::8888#Google-v6
-2a01:4f8:c17:1c66::1#HaGeZi-Root-v6
-2a01:4f8:1c1c:d363::1#HaGeZi-Wurzn-v6
+2620:fe::fe#Quad9-v6
 2a13:1001::86:54:11:11#DNS4EU-v6
+2a01:4f8:1c1c:d363::1#HaGeZi-Wurzn-v6
+2a01:4f8:c17:1c66::1#HaGeZi-Root-v6
+2003:180:2:a000::53#Telekom-v6
 "
 
-DOMAINS2TEST=(google.com youtube.com facebook.com github.com instagram.com whatsapp.com reddit.com wikipedia.org amazon.de tiktok.com apple.com paypal.com)
+DOMAINS2TEST=(amazon.de apple.com cloudflare.com denic.de facebook.com google.com microsoft.com paypal.com tiktok.com wikipedia.org)
 totaldomains=${#DOMAINS2TEST[@]}
 
 usage() {
