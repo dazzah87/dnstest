@@ -6,6 +6,7 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 TMP_DIR=$(mktemp -d)
 cleanup() {
+  kill $(jobs -p) 2>/dev/null || true
   rm -rf "$TMP_DIR"
 }
 trap cleanup EXIT INT TERM
