@@ -24,7 +24,7 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
-TIMEOUT_SEC=1
+TIMEOUT_SEC=2
 REPEAT_COUNT=1
 
 # Latency color thresholds in ms
