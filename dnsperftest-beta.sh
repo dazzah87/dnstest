@@ -146,13 +146,27 @@ test_provider_worker() {
   local ftime=0 successcount=0
   local row="${pname}|${pip}"
 
+  # Prüfen, ob timeout oder gtimeout auf dem System existiert
+  local timeout_cmd=""
+  if command -v timeout >/dev/null 2>&1; then
+    timeout_cmd="timeout"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    timeout_cmd="gtimeout"
+  fi
+
   for d in "${DOMAINS2TEST[@]}"; do
     local dtime=0 dsuccess=0 dtimeout=0
     local r=1
     while [ "$r" -le "$REPEAT_COUNT" ]; do
       local output rc ttime
       set +e
-      output=$(timeout "${TIMEOUT_SEC}s" "$dig_cmd" +tries=1 +time="$TIMEOUT_SEC" +stats @"$pip" "$d" 2>&1)
+      
+      # Ausführung je nach Verfügbarkeit des timeout-Befehls
+      if [[ -n "$timeout_cmd" ]]; then
+        output=$($timeout_cmd "${TIMEOUT_SEC}s" "$dig_cmd" +tries=1 +time="$TIMEOUT_SEC" +stats @"$pip" "$d" 2>&1)
+      else
+        output=$("$dig_cmd" +tries=1 +time="$TIMEOUT_SEC" +stats @"$pip" "$d" 2>&1)
+      fi
       rc=$?
       set -e
 
