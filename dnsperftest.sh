@@ -32,6 +32,9 @@ PROVIDERSV4="
 86.54.11.11#DNS4EU
 159.69.155.94#HaGeZi-Wurzn
 188.34.161.210#HaGeZi-Root
+76.76.2.0#ControlD
+94.140.14.14#AdGuard
+176.9.93.198#DNSForge
 "
 
 PROVIDERSV6="
@@ -41,6 +44,9 @@ PROVIDERSV6="
 2a13:1001::86:54:11:11#DNS4EU-v6
 2a01:4f8:1c1c:d363::1#HaGeZi-Wurzn-v6
 2a01:4f8:c17:1c66::1#HaGeZi-Root-v6
+2606:1a40::#ControlD-v6
+2a10:50c0::ad1:ff#AdGuard-v6
+2a01:4f8:151:34aa::198#DNSForge-v6
 "
 
 DOMAINS2TEST=(amazon.de apple.com cloudflare.com denic.de facebook.com google.com microsoft.com paypal.com tiktok.com wikipedia.org)
