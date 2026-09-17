@@ -113,11 +113,11 @@ run_dnssec_audit_silent() {
       
       local res status="FAIL"
       res=$($dig_cmd +short +tries=1 +time=2 @"$pip" "$domain" A 2>/dev/null || true)
-
+      
       if [[ "$expect" == "YES" && -n "$res" ]] || [[ "$expect" == "NO" && -z "$res" ]]; then
         status="PASS"
       fi
-
+      
       if [[ "$status" == "FAIL" ]]; then
         fails="${fails:+$fails$'\n'}  - $test_name ($a_name)"
       fi
@@ -157,6 +157,18 @@ test_provider_worker() {
   fi
   row="${row}|${ecs}"
 
+  # Calculate Rating
+  local rating
+  rating=$(awk -v a="$avg" 'BEGIN {
+    if (a < 20) print "Excellent"
+    else if (a <= 50) print "Very good"
+    else if (a <= 100) print "OK"
+    else if (a <= 120) print "Average"
+    else if (a <= 200) print "Slow"
+    else print "Very slow"
+  }')
+  row="${row}|${rating}"
+
   local audit_fails
   audit_fails=$(run_dnssec_audit_silent "$pip")
   if [[ -n "$audit_fails" ]]; then
@@ -186,7 +198,8 @@ print_table() {
   echo ""
   echo "Your public IP:"
   echo "- IPv4: $my_ipv4 ($my_ipv4_info)"
-  echo "- IPv6: $my_ipv6 ($my_ipv6_info)" 
+  echo "- IPv6: $my_ipv6 ($my_ipv6_info)"
+
   echo ""
 
   local max_prov_len=8
@@ -215,7 +228,7 @@ print_table() {
 
   printf "\033[1m%-${prov_pad}s %-${ip_pad}s\e[0m" "Provider" "IP"
   for ((i=1; i<=totaldomains; i++)); do printf "\e[1m%-8s\e[0m" "Test$i"; done
-  printf "\033[1m%-8s %-8s\e[0m\n" "Average" "Privacy"
+  printf "\033[1m%-8s %-12s %-8s\e[0m\n" "Average" "Rating" "Privacy"
 
   while IFS= read -r row; do
     [[ -z "$row" ]] && continue
@@ -233,10 +246,21 @@ print_table() {
     else
       c_ecs="\e[33m" # Yellow
     fi
+
+    local rating="${parts[totaldomains+4]}"
+    local c_rating=""
+    case "$rating" in
+      "Excellent") c_rating="\033[1;32m" ;;
+      "Very good") c_rating="\033[0;32m" ;;
+      "OK")        c_rating="\033[1;33m" ;;
+      "Average")   c_rating="\033[0m"    ;;
+      "Slow")      c_rating="\033[0;31m" ;;
+      "Very slow") c_rating="\033[1;31m" ;;
+    esac
     
     printf "${c_start}%-${prov_pad}s %-${ip_pad}s" "${parts[0]}" "${parts[1]}"
     for ((i=1; i<=totaldomains; i++)); do printf "%-8s" "${parts[i+1]}ms"; done
-    printf "%-8s ${c_ecs}%-8s${c_end}\n" "${parts[totaldomains+2]}" "$ecs_val"
+    printf "%-8s ${c_rating}%-12s${c_end} ${c_ecs}%-8s${c_end}\n" "${parts[totaldomains+2]}" "$rating" "$ecs_val"
   done < <(echo "$rows" | sort_rows)
 
   if ls "$TMP_DIR"/*_audit.txt 1> /dev/null 2>&1; then
@@ -254,12 +278,20 @@ print_table() {
   printf "\n\033[1m--- Info ---\033[0m\n"
   printf "'Strict' = No ECS (EDNS Client Subnet) information is sent.\n"
   printf "'Sent' = Part of your client subnet is shared via ECS.\n\n"
+  
+  printf "\033[1m--- DNS Resolution Reference Values ---\033[0m\n"
+  printf "%-10s %-12s %s\n" "< 20ms" "Excellent" "Very fast response, often due to a nearby resolver and/or a warm cache."
+  printf "%-10s %-12s %s\n" "20-50ms" "Very good" "Common target range for good user experience."
+  printf "%-10s %-12s %s\n" "50-100ms" "OK" "Usually fine, but can add noticeable delay if a page triggers many lookups."
+  printf "%-10s %-12s %s\n" "100-120ms" "Average" "Often cited as the upper end of average DNS lookup time."
+  printf "%-10s %-12s %s\n" "120-200ms" "Slow" "Suggests distance, routing/latency, resolver load, or extra steps."
+  printf "%-10s %-12s %s\n\n" "> 200ms" "Very slow" "Frequently indicates a real performance or reachability issue."
 }
 
 print_csv() {
   printf "provider,ip"
   for ((i=1; i<=totaldomains; i++)); do printf ",test%d" "$i"; done
-  printf ",average,privacy\n"
+  printf ",average,privacy,rating\n"
   while IFS= read -r row; do 
     [[ -n "$row" ]] && echo "${row//|/,}"
   done < <(echo "$rows" | sort_rows)
@@ -268,7 +300,7 @@ print_csv() {
 print_tsv() {
   printf "provider\tip"
   for ((i=1; i<=totaldomains; i++)); do printf "\ttest%d" "$i"; done
-  printf "\taverage\tprivacy\n"
+  printf "\taverage\tprivacy\trating\n"
   while IFS= read -r row; do 
     [[ -n "$row" ]] && printf '%s\n' "$row" | tr '|' '\t'
   done < <(echo "$rows" | sort_rows)
@@ -289,7 +321,7 @@ print_json() {
       [[ "$i" -eq 1 ]] || printf ','
       printf '%s' "${parts[i+1]}"
     done
-    printf '],"average":%s,"privacy":"%s"}' "${parts[totaldomains+2]}" "${parts[totaldomains+3]}"
+    printf '],"average":%s,"privacy":"%s","rating":"%s"}' "${parts[totaldomains+2]}" "${parts[totaldomains+3]}" "${parts[totaldomains+4]}"
   done < <(echo "$rows" | sort_rows)
   printf '\n]\n'
 }
