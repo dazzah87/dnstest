@@ -69,11 +69,11 @@ DNSSEC_ALGOS=("13:ECDSA P-256" "14:ECDSA P-384" "15:Ed25519")
 
 usage() {
   cat <<EOF
-$SCRIPT_NAME $VERSION - DNS resolver benchmark and HaGeZi DNS server check
+$SCRIPT_NAME $VERSION - DNS resolver benchmark
 
 Usage:
   $SCRIPT_NAME [ipv4|ipv6|all] [table|csv|tsv|json] [options]
-  $SCRIPT_NAME check [-4|-6] [-v] [root|wurzn|juuri|ctif ...]
+  $SCRIPT_NAME check [-4|-6] [-v] [root|wurzn|ctif ...]
   $SCRIPT_NAME -h|--help | -V|--version
 
 Benchmark options:
@@ -94,7 +94,7 @@ Benchmark output:
   and Privacy (ECS). Below the table: DNSSEC audit results and reference values.
 
 Check mode:
-  Tests every HaGeZi DNS server over Do53, DoT, DoH and DoQ (IPv4 and IPv6):
+  Tests every DNS server over Do53, DoT, DoH and DoQ (IPv4 and IPv6):
   resolution, DNSSEC validation, blocking behaviour and ping latency.
     -4 / -6        test IPv4 / IPv6 only
     -v, --verbose  show the result of every single query
@@ -287,7 +287,7 @@ load_lists() {
   domains_arr=(); domain_labels=()
   for d in $DOMAINS2TEST; do
     domains_arr+=("$d")
-    domain_labels+=("${d%.*}")   # table header without TLD
+    domain_labels+=("${d%.*}")
   done
 
   while read -r name v4 v6 lbl; do
@@ -332,7 +332,7 @@ measure() {
         elif [ -n "$ttime" ] && [ "$rcode" = "NOERROR" ]; then
           sum_time[$k]=$(( ${sum_time[$k]:-0} + ttime ))
           count_success[$k]=$(( ${count_success[$k]:-0} + 1 ))
-        fi   # anything else (SERVFAIL, NXDOMAIN, no reply, ...) is an "error"
+        fi
       done
     done
   done
@@ -659,8 +659,8 @@ ktrace() {
   [ "$CK_VERBOSE" = 1 ] || return 0
   local s a e
   s=$(kstatus "$2"); a=$(kfirst_a "$2"); e=$(kede "$2")
-  [ -z "$a" ] && a=$(awk 'NF' <<<"$2" | grep -E '^[0-9.]+$' | head -1)   # +short output
-  grep -q 'status:' <<<"$2" || s=""                                       # +short has no header
+  [ -z "$a" ] && a=$(awk 'NF' <<<"$2" | grep -E '^[0-9.]+$' | head -1)
+  grep -q 'status:' <<<"$2" || s=""
   printf '        %-42s %s%s%s\n' "$1" "${s#status: }" "${a:+ $a}" "${e:+ [$e]}"
 }
 
@@ -673,7 +673,7 @@ ping_avg() {
     c=(ping)
   fi
   out=$("${c[@]}" -c "$CK_PING_COUNT" -i 0.2 "$ip" 2>&1 </dev/null)
-  # retry with the default interval if -i 0.2 was rejected (non-root, BusyBox, ...)
+
   grep -q 'transmitted' <<<"$out" || out=$("${c[@]}" -c "$CK_PING_COUNT" "$ip" 2>&1 </dev/null)
   avg=$(sed -nE 's#.*min/avg/max[^=]*= *[0-9.]+/([0-9.]+)/.*#\1#p' <<<"$out" | head -1)
   [ -n "$avg" ] && awk -v x="$avg" 'BEGIN{printf "%d", int(x+0.5)}'
@@ -726,7 +726,7 @@ check_proto() {
     esac
   done
   if [ $bogus_open -gt 0 ]; then dok=0
-  elif [ $dok = 1 ] && [ $bogus_servfail -eq 0 ]; then dok=2   # inconclusive
+  elif [ $dok = 1 ] && [ $bogus_servfail -eq 0 ]; then dok=2
   fi
 
   out=$(kq "$proto" "$ip" "$fqdn" "$CK_BLOCK_DOMAIN" +short)
